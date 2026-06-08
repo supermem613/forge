@@ -1,0 +1,77 @@
+// tests/cli.test.js — spawn the CLI and verify subcommand behavior.
+import { after, before, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, '..');
+const CLI = path.join(REPO_ROOT, 'lib', 'cli.js');
+const RUNBOOK_ID = 'cli-list-runbook';
+const TEST_RUNBOOK_DIR = path.join(REPO_ROOT, 'runbooks', RUNBOOK_ID);
+
+before(async () => {
+  await fs.mkdir(TEST_RUNBOOK_DIR, { recursive: true });
+  await fs.writeFile(path.join(TEST_RUNBOOK_DIR, 'manifest.json'), JSON.stringify({
+    id: RUNBOOK_ID,
+    version: '0.1.0',
+    description: 'CLI list test runbook',
+    fixturePrefix: '_ForgeTest_cli_list_',
+    evals: [],
+    defaults: { samples: 1 },
+  }, null, 2) + '\n');
+});
+
+after(async () => {
+  await fs.rm(TEST_RUNBOOK_DIR, { recursive: true, force: true });
+});
+
+function run(args, { cwd = REPO_ROOT } = {}) {
+  return new Promise((resolve) => {
+    const proc = spawn(process.execPath, [CLI, ...args], { cwd, env: process.env });
+    let stdout = '', stderr = '';
+    proc.stdout.on('data', d => stdout += d.toString('utf8'));
+    proc.stderr.on('data', d => stderr += d.toString('utf8'));
+    proc.on('exit', code => resolve({ code, stdout, stderr }));
+  });
+}
+
+test('CLI: no args prints usage and exits 0', async () => {
+  const r = await run([]);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /forge — experiment harness/);
+  assert.match(r.stdout, /Commands:/);
+  assert.match(r.stdout, /propose/);
+  assert.match(r.stdout, /artifact-check/);
+});
+
+test('CLI: --help exits 0 with usage', async () => {
+  const r = await run(['--help']);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /Commands:/);
+});
+
+test('CLI: list shows core runbooks', async () => {
+  const r = await run(['list']);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, new RegExp(RUNBOOK_ID));
+});
+
+test('CLI: propose for unknown experiment errors', async () => {
+  const r = await run(['propose', '_nope']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /no such experiment/);
+});
+
+test('CLI: unknown subcommand exits non-zero with usage', async () => {
+  const r = await run(['bogus', 'x']);
+  assert.equal(r.code, 1);
+});
+
+test('CLI: setup for unknown experiment exits non-zero', async () => {
+  const r = await run(['setup', '_no-such-exp']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /no such experiment/);
+});

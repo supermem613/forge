@@ -1,0 +1,14 @@
+{
+  "id": "sample-eval",
+  "description": "Generic eval fixture for loader tests.",
+  "prompt": "Summarize the provided artifact.",
+  "criteria": {
+    "must": [
+      "The response addresses the prompt."
+    ],
+    "should": [
+      "The response cites relevant evidence."
+    ],
+    "could": []
+  }
+}

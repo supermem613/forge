@@ -1,0 +1,46 @@
+{
+  "name": "forge",
+  "version": "0.4.0",
+  "type": "module",
+  "description": "Local-first harness for paired control and variant experiments",
+  "license": "MIT",
+  "author": "Marcus Markiewicz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/supermem613/forge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/supermem613/forge/issues"
+  },
+  "homepage": "https://github.com/supermem613/forge#readme",
+  "keywords": [
+    "experiments",
+    "evaluation",
+    "runbooks",
+    "cli"
+  ],
+  "bin": {
+    "forge": "lib/cli.js"
+  },
+  "scripts": {
+    "list": "node lib/cli.js list",
+    "setup": "node lib/cli.js setup",
+    "run": "node lib/cli.js run",
+    "score": "node lib/cli.js score",
+    "judge": "node lib/cli.js judge",
+    "teardown": "node lib/cli.js teardown",
+    "smoke": "node lib/cli.js --help && node lib/cli.js list",
+    "test": "node --test --test-reporter=dot tests/*.test.js",
+    "lint": "eslint lib/ tests/"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "docx": "^9.6.1",
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

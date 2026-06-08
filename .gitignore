@@ -1,0 +1,20 @@
+node_modules/
+*.log
+.env
+.env.local
+.DS_Store
+Thumbs.db
+
+forge.config.json
+
+# Experiments are 100% local lab notebooks - never committed.
+experiments/
+
+# Legacy top-level runs dir (pre-experiments-split). Shouldn't exist anymore;
+# guard in case anyone re-creates it.
+runs/
+
+# Local debug artifacts (kept on disk for inspection, not committed)
+debug-eval04.mjs
+debug-eval04-tmp/
+debug-eval04-*.json
