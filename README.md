@@ -32,6 +32,8 @@ node lib\cli.js --help
 ```powershell
 forge list
 forge experiments
+forge --version
+forge schema --summary
 forge config init
 forge config add-module --path C:\path\to\forge-module
 forge new-experiment <name> --runbook <runbook>

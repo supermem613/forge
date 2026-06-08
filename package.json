@@ -2,7 +2,7 @@
   "name": "forge",
   "version": "0.4.0",
   "type": "module",
-  "description": "Local-first harness for paired control and variant experiments",
+  "description": "Local-first CLI harness for paired control/variant experiments with reusable runbooks, scoring, judging, and reports.",
   "license": "MIT",
   "author": "Marcus Markiewicz",
   "repository": {
@@ -29,6 +29,7 @@
     "score": "node lib/cli.js score",
     "judge": "node lib/cli.js judge",
     "teardown": "node lib/cli.js teardown",
+    "build": "node --check lib/cli.js",
     "smoke": "node lib/cli.js --help && node lib/cli.js list",
     "test": "node --test --test-reporter=dot tests/*.test.js",
     "lint": "eslint lib/ tests/"

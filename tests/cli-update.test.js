@@ -47,7 +47,7 @@ test('updateForge runs root install and link when root git pull returns changes'
   assert.equal(result.ok, true);
   assert.deepEqual(
     calls.filter((c) => c.cmd === 'npm').map((c) => c.args.join(' ')),
-    ['install --no-audit --no-fund', 'link'],
+    ['install --no-audit --no-fund', 'run build', 'link'],
   );
 });
 
