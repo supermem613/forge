@@ -96,6 +96,12 @@ test('new-experiment --control-from rejects missing path', async () => {
     const r = await runCli(['new-experiment', name, '--runbook', RUNBOOK_ID, '--control-from', 'C:/no/such/path/forge-test']);
     assert.notEqual(r.code, 0);
     assert.match(r.err, /control-from/);
+    const parsed = JSON.parse(r.out);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.code, 'NOT_FOUND');
+    // Atomicity: a bad --control-from must not leave a half-created experiment
+    // that a retry would then reject as CONFLICT.
+    await assert.rejects(fs.access(path.join(REPO_ROOT, 'experiments', name)));
   } finally {
     await cleanup(); 
   }
@@ -143,14 +149,53 @@ test('propose --copy-prev with prior mark copies from latest mark', async () => 
   }
 });
 
-test('runs --json emits JSON array', async () => {
+test('propose --from missing path fails atomically without leaving a mark', async () => {
+  const name = `_t_proposefrom_${Date.now()}`; const { cleanup } = await tmpExperimentsDir(name); try {
+    let r = await runCli(['new-experiment', name, '--runbook', RUNBOOK_ID]);
+    assert.equal(r.code, 0, r.err);
+    r = await runCli(['propose', name, '--from', 'C:/no/such/path/forge-from']);
+    assert.notEqual(r.code, 0);
+    const parsed = JSON.parse(r.out);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.command, 'propose');
+    assert.equal(parsed.code, 'NOT_FOUND');
+    assert.ok(parsed.hint, 'error envelope carries a remediation hint');
+    // Atomicity: a bad --from must not create variants/mark-1/ and burn the
+    // next mark number on retry.
+    await assert.rejects(fs.access(path.join(REPO_ROOT, 'experiments', name, 'variants', 'mark-1')));
+  } finally {
+    await cleanup(); 
+  }
+});
+
+test('malformed experiment.json yields a VALIDATION_FAILED envelope', async () => {
+  const name = `_t_badjson_${Date.now()}`; const { cleanup } = await tmpExperimentsDir(name); try {
+    const expRoot = path.join(REPO_ROOT, 'experiments', name);
+    await fs.mkdir(expRoot, { recursive: true });
+    await fs.writeFile(path.join(expRoot, 'experiment.json'), '{ this is not json');
+    const r = await runCli(['propose', name]);
+    assert.notEqual(r.code, 0);
+    const parsed = JSON.parse(r.out);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.command, 'propose');
+    assert.equal(parsed.code, 'VALIDATION_FAILED');
+    assert.ok(parsed.hint, 'error envelope carries a remediation hint');
+  } finally {
+    await cleanup(); 
+  }
+});
+
+test('runs emits a JSON envelope with a runs array', async () => {
   const name = `_t_runsjson_${Date.now()}`; const { cleanup } = await tmpExperimentsDir(name); try {
     let r = await runCli(['new-experiment', name, '--runbook', RUNBOOK_ID]);
     assert.equal(r.code, 0, r.err);
-    r = await runCli(['runs', name, '--json']);
+    r = await runCli(['runs', name]);
     assert.equal(r.code, 0, r.err);
     const parsed = JSON.parse(r.out);
-    assert.ok(Array.isArray(parsed));
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.command, 'runs');
+    assert.equal(parsed.data.experiment, name);
+    assert.ok(Array.isArray(parsed.data.runs));
   } finally {
     await cleanup(); 
   }

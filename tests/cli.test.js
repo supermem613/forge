@@ -41,7 +41,7 @@ function run(args, { cwd = REPO_ROOT } = {}) {
 test('CLI: no args prints usage and exits 0', async () => {
   const r = await run([]);
   assert.equal(r.code, 0);
-  assert.match(r.stdout, /forge 0\.4\.0 - Local-first CLI harness for paired control\/variant experiments/);
+  assert.match(r.stdout, /forge 0\.5\.0 - Local-first CLI harness for paired control\/variant experiments/);
   assert.match(r.stdout, /Commands:/);
   assert.match(r.stdout, /propose/);
   assert.match(r.stdout, /artifact-check/);
@@ -57,7 +57,7 @@ test('CLI: --help exits 0 with usage', async () => {
 test('CLI: --version prints package version', async () => {
   const r = await run(['--version']);
   assert.equal(r.code, 0);
-  assert.equal(r.stdout.trim(), '0.4.0');
+  assert.equal(r.stdout.trim(), '0.5.0');
 });
 
 test('CLI: schema emits JSON command catalog', async () => {
@@ -66,8 +66,10 @@ test('CLI: schema emits JSON command catalog', async () => {
   assert.equal(r.stderr, '');
   const schema = JSON.parse(r.stdout);
   assert.equal(schema.schemaVersion, 1);
-  assert.equal(schema.cliVersion, '0.4.0');
+  assert.equal(schema.cliVersion, '0.5.0');
   assert.deepEqual(schema.envelope.successEnvelope, ['ok', 'command', 'data']);
+  assert.deepEqual(schema.envelope.errorEnvelope, ['ok', 'command', 'error', 'code', 'hint']);
+  assert.ok(schema.errorCodes.some(e => e.code === 'CONFLICT'), 'CONFLICT documented in errorCodes');
   assert.ok(schema.commands.some(command => command.path.join(' ') === 'schema'));
   assert.ok(schema.commands.some(command => command.path.join(' ') === 'doctor'));
   assert.ok(schema.commands.every(command => command.effect));
@@ -83,16 +85,44 @@ test('CLI: schema --summary can filter by command prefix', async () => {
   assert.equal(summary.commandCount, 1);
 });
 
-test('CLI: list shows core runbooks', async () => {
+test('CLI: list emits a JSON envelope listing runbooks', async () => {
   const r = await run(['list']);
   assert.equal(r.code, 0);
-  assert.match(r.stdout, new RegExp(RUNBOOK_ID));
+  const parsed = JSON.parse(r.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.command, 'list');
+  assert.ok(Array.isArray(parsed.data.runbooks));
+  assert.ok(parsed.data.runbooks.some(rb => rb.id === RUNBOOK_ID));
+});
+
+test('CLI: errors emit a failure envelope on stdout and a human line on stderr', async () => {
+  const r = await run(['bogus', 'x']);
+  assert.equal(r.code, 1);
+  const parsed = JSON.parse(r.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.command, 'bogus');
+  assert.match(parsed.error, /unknown command/);
+  assert.equal(parsed.code, 'USAGE', 'error envelope carries a machine-branchable code');
+  assert.ok(parsed.hint, 'error envelope carries a remediation hint');
+  assert.match(r.stderr, /forge: unknown command/);
 });
 
 test('CLI: propose for unknown experiment errors', async () => {
   const r = await run(['propose', '_nope']);
   assert.equal(r.code, 1);
   assert.match(r.stderr, /no such experiment/);
+});
+
+test('CLI: command-helper failures carry a machine-branchable code and hint', async () => {
+  // cli-compare.js throws inside the dispatcher; the envelope must surface its
+  // ForgeError code/hint, not degrade to code:"ERROR" / hint:null.
+  const r = await run(['compare', '_nope_exp', 'mark-1', 'mark-2']);
+  assert.equal(r.code, 1);
+  const parsed = JSON.parse(r.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.command, 'compare');
+  assert.equal(parsed.code, 'NOT_FOUND');
+  assert.ok(parsed.hint, 'helper-path error envelope carries a remediation hint');
 });
 
 test('CLI: unknown subcommand exits non-zero with usage', async () => {

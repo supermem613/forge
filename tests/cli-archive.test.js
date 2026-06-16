@@ -45,7 +45,7 @@ test('archive moves experiment into <to>/experiments/<exp>/<ts>/ and removes sou
   try {
     const r = await runCli(['archive', name, '--to', archiveRoot, '--reason', 'test', '--no-zip']);
     assert.equal(r.code, 0, r.err);
-    const out = JSON.parse(r.out);
+    const out = JSON.parse(r.out).data;
     assert.equal(out.action, 'archive');
     assert.equal(out.experiment, name);
     assert.equal(out.runbook, 'create-skill');
@@ -76,7 +76,7 @@ test('archive --keep-shell re-stages experiment.json and bare control dirs', asy
   try {
     const r = await runCli(['archive', name, '--to', archiveRoot, '--keep-shell', '--no-zip']);
     assert.equal(r.code, 0, r.err);
-    const out = JSON.parse(r.out);
+    const out = JSON.parse(r.out).data;
     assert.equal(out.keepShell, true);
     // Source restored as ready-to-run shell.
     const restored = JSON.parse(await fs.readFile(path.join(expDir, 'experiment.json'), 'utf8'));
@@ -98,7 +98,7 @@ test('archive --dry-run does not touch source or archive', async () => {
   try {
     const r = await runCli(['archive', name, '--to', archiveRoot, '--dry-run', '--no-zip']);
     assert.equal(r.code, 0, r.err);
-    const out = JSON.parse(r.out);
+    const out = JSON.parse(r.out).data;
     assert.equal(out.dryRun, true);
     assert.ok(out.archiveDirAbsPath.startsWith(path.resolve(archiveRoot)));
     // Source still intact.
@@ -129,7 +129,7 @@ test('archive uses FORGE_ARCHIVE_ROOT env when --to omitted', async () => {
   try {
     const r = await runCli(['archive', name, '--no-zip'], { FORGE_ARCHIVE_ROOT: archiveRoot });
     assert.equal(r.code, 0, r.err);
-    const out = JSON.parse(r.out);
+    const out = JSON.parse(r.out).data;
     assert.ok(out.archiveDirAbsPath.startsWith(path.resolve(archiveRoot)));
   } finally {
     await fs.rm(expDir, { recursive: true, force: true });
@@ -183,7 +183,7 @@ test('archive zips per-run dirs by default', async () => {
   try {
     const r = await runCli(['archive', name, '--to', archiveRoot]);
     assert.equal(r.code, 0, r.err);
-    const out = JSON.parse(r.out);
+    const out = JSON.parse(r.out).data;
     assert.equal(out.zipRuns, true);
     assert.ok(Array.isArray(out.zippedRuns), 'zippedRuns array present');
     assert.ok(out.zippedRuns.length >= 1, 'at least one run zipped');

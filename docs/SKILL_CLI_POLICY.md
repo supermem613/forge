@@ -5,9 +5,11 @@ This is the **single contract** between forge's `.claude/skills/*` and
 
 ## The split
 
+Every non-interactive command emits one JSON envelope on **stdout** (`{ ok, command, data }`, or `{ ok, command, error, code, hint }` on failure). Progress and human narration go to **stderr**. There is no `--json` flag. The error `code` is a stable machine-branchable class (`USAGE`, `NOT_FOUND`, `VALIDATION_FAILED`, `CONFLICT`, `ERROR`). Human-readable content (such as `forge present` markdown) rides inside `data`, so skills interpret a stable machine shape and never scrape formatted stdout.
+
 | Layer | Owns | Examples |
 |---|---|---|
-| **CLI** (`lib/cli.js` + `lib/*.js`) | Anything mechanical: file edits, schema validation, manifest patching, output formatting, semver, idempotent table writes, sub-agent dispatch prompts, paste-ready summaries. | `forge new-runbook` updates the catalog. `forge add-eval` patches the manifest. `forge bump --changelog` writes the README line. `forge judge --dispatch-prompt` emits the sub-agent prompt. `forge present` formats the user-facing block. |
+| **CLI** (`lib/cli.js` + `lib/*.js`) | Anything mechanical: file edits, schema validation, manifest patching, output formatting, semver, idempotent table writes, sub-agent dispatch prompts, paste-ready summaries. | `forge new-runbook` updates the catalog. `forge add-eval` patches the manifest. `forge bump --changelog` writes the README line. `forge judge --dispatch-prompt` emits the sub-agent prompt. `forge present` returns the user-facing block as `data.markdown`. |
 | **Skill** (`.claude/skills/<name>/SKILL.md`) | Anything requiring **judgment, vocabulary, or policy**: when to invoke, what to ask the user, what each safety tenet means, how to interpret a result, which mode of operation is appropriate. | "Ask the user for the experiment name first." "Never reintroduce SAFE/DEGRADED/BROKEN vocabulary." "If gate-pass < 80%, downgrade conclusions." |
 
 ## The rule

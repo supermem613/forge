@@ -46,10 +46,25 @@ forge judge <experiment> --pair latest
 forge report <experiment> --pair latest
 forge teardown <experiment>
 forge validate [runbook]
-forge artifact-check <runDir> [--json]
+forge artifact-check <runDir>
 ```
 
 Modules may register additional commands, runbook roots, doctor checks, pre-step hooks, and abort cleanup hooks. Forge remains the only CLI driver.
+
+## Output contract (agentic-first)
+
+Every non-interactive command writes exactly one JSON envelope to **stdout**. There is no `--json` flag. JSON is the only stdout contract, so a fresh agent can run any command and parse stdout directly. Progress, diagnostics, banners, and human narration go to **stderr**.
+
+```json
+{ "ok": true,  "command": "<name>", "data": { } }
+{ "ok": false, "command": "<name>", "error": "<message>", "code": "<code>", "hint": "<remediation>" }
+```
+
+- `ok` reflects the result. Validation-style commands return `ok: false` with structured `data` and exit non-zero without throwing.
+- A thrown failure emits the error envelope on stdout, a short `forge: <message>` line on stderr, and exits 1.
+- `code` is a stable machine-branchable error class (`USAGE`, `NOT_FOUND`, `VALIDATION_FAILED`, `CONFLICT`, `ERROR`); `hint` is a remediation string or `null`. Branch on `code`, not on `error` text.
+- `schema` emits the raw schema catalog and `doctor` emits its `{ ok, checks }` health shape. Both already start with `ok` and are exempt from the generic `data` envelope.
+- `forge schema` documents the full command surface for discovery.
 
 ## Repository layout
 
