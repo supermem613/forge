@@ -1,0 +1,12 @@
+# Enforce LF line endings in the working tree on every machine.
+# Without this, core.autocrlf=true checks files out as CRLF, but `npm link`
+# rewrites the bin shebang line to LF, leaving lib/cli.js with mixed endings
+# that git reports as modified. Pinning LF keeps checkout and npm link in sync.
+* text=auto eol=lf
+
+# Binaries must never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.wasm binary
