@@ -81,6 +81,35 @@ test('runReport: emits REPORT.md and REPORT.json into variant run', async (t) =>
   assert.ok(logs.some(l => l.includes('Overall +20.0pp')));
 });
 
+test('runReport: reliability without skillBody does not crash', async (t) => {
+  // Single-turn runbooks (e.g. spark-scenario-efficiency) emit a reliability
+  // object but no skillBody sub-object, since they author no artifact. The byte
+  // signal must skip gracefully rather than dereference a missing skillBody.
+  const reliability = {
+    totalSamples: 5,
+    ok: 5, errored: 0,
+    gateValid: 5, gateValidPct: 100,
+    codeModeEngaged: 5, codeModeEngagedPct: 100,
+    tokensMatched: 5, tokensMatchedPct: 100,
+    meanLatencyMs: 94004,
+  };
+  const tiers = { must: { pct: 90 }, should: { pct: 90 }, could: { pct: 80 } };
+  const ctl = mkScore({
+    overallPct: 89, tiers,
+    evals: [mkEval('e1', 89, tiers)],
+    reliability, samples: 5, eligibleSamples: 5, totalSamplesAcrossEvals: 5,
+  });
+  const tx = mkScore({
+    overallPct: 88, tiers,
+    evals: [mkEval('e1', 88, tiers)],
+    reliability, samples: 5, eligibleSamples: 5, totalSamplesAcrossEvals: 5,
+  });
+  const { root, txRun } = await scaffoldExperiment(t, { ctlScore: ctl, txScore: tx });
+  await runReport({ argv: ['--experiment', 'demo'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.ok(md.length > 0);
+});
+
 test('runReport: throws without --experiment', async () => {
   await assert.rejects(
     () => runReport({ argv: [], repoRoot: '/x', log: () => {} }),

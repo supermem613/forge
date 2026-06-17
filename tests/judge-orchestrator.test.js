@@ -121,6 +121,23 @@ test('runJudge: rejects missing --experiment', async () => {
   );
 });
 
+test('runJudge: single-turn artifact surfaces turn1 response text', async (t) => {
+  const { root, rb, ctlRun } = await scaffold(t, { withVariant: false });
+  // Single-turn runbooks (spark-scenario-efficiency) carry the answer in
+  // turn1.response.text with no turn2. Overwrite the e1 turn1 stub with a real
+  // answer and assert the judge prompt renders it instead of "(no response)".
+  await fs.writeFile(path.join(ctlRun, 'turn1', 'e1-sample1.json'),
+    JSON.stringify({ prompt: 'p', response: { toolDetails: [], text: 'ANSWER_XYZ_42' } }));
+  await runJudge({
+    argv: ['--experiment', 'demo', '--mode', 'agent', '--variant', 'control'],
+    runbookDir: rb, repoRoot: root, log: () => {},
+  });
+  const prompt = await fs.readFile(path.join(ctlRun, 'judge-prompts', 'e1-sample1.md'), 'utf8');
+  assert.ok(prompt.includes('ANSWER_XYZ_42'), 'judge prompt must include the turn1 answer text');
+  assert.ok(!prompt.includes('(no response)'), 'single-turn artifact must not render "(no response)"');
+  assert.ok(!prompt.includes('Stage 2 — Exercise'), 'single-turn artifact must not render a Stage 2 section');
+});
+
 test('runJudge: skips run with no results.json', async (t) => {
   const { root, rb, ctlRun } = await scaffold(t, { withVariant: false, results: false });
   const logs = [];
