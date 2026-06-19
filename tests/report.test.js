@@ -168,3 +168,51 @@ test('runReport: emits generic reliability rows', async (t) => {
   assert.match(md, /Variant activated/);
   assert.doesNotMatch(md, /domain-specific bypass/);
 });
+
+async function scaffoldThreeWay(t, { ctlScore, prevScore, txScore, prevMark = 'mark-1', mark = 'mark-2' }) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-report3-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const expDir = path.join(root, 'experiments', 'demo');
+  const ctlRun = path.join(expDir, 'variants', 'control', 'runs', NOW);
+  const prevRun = path.join(expDir, 'variants', prevMark, 'runs', NOW);
+  const txRun = path.join(expDir, 'variants', mark, 'runs', NOW);
+  await fs.mkdir(ctlRun, { recursive: true });
+  await fs.mkdir(txRun, { recursive: true });
+  await fs.writeFile(path.join(ctlRun, 'score.json'), JSON.stringify(ctlScore));
+  await fs.writeFile(path.join(txRun, 'score.json'), JSON.stringify(txScore));
+  if (prevScore) {
+    await fs.mkdir(prevRun, { recursive: true });
+    await fs.writeFile(path.join(prevRun, 'score.json'), JSON.stringify(prevScore));
+  }
+  return { root, txRun };
+}
+
+test('runReport: renders three-way trend vs previous mark', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const ctl = mkScore({ overallPct: 30, tiers: tiers(30, 30, 30), evals: [mkEval('e1', 30, tiers(30, 30, 30))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const prev = mkScore({ overallPct: 50, tiers: tiers(50, 50, 50), evals: [mkEval('e1', 50, tiers(50, 50, 50))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const tx = mkScore({ overallPct: 70, tiers: tiers(70, 70, 70), evals: [mkEval('e1', 70, tiers(70, 70, 70))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const { root, txRun } = await scaffoldThreeWay(t, { ctlScore: ctl, prevScore: prev, txScore: tx });
+  const logs = [];
+  await runReport({ argv: ['--experiment', 'demo'], repoRoot: root, log: (m) => logs.push(m) });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /Trend vs previous mark \(mark-1\)/);
+  // control · previous · current quality row for overall: 50% prev → 70% current = +20pp.
+  assert.match(md, /\| \*\*overall\*\* \| 30\.0% \| 50\.0% \| 70\.0% \| \+20\.0pp \|/);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.prevVariant, 'mark-1');
+  assert.equal(json.prevTrend.overall, 20);
+  assert.ok(logs.some(l => l.includes('vs mark-1')));
+});
+
+test('runReport: first mark reports no previous to compare against', async (t) => {
+  const tiers = { must: { pct: 60 }, should: { pct: 50 }, could: { pct: 40 } };
+  const ctl = mkScore({ overallPct: 30, tiers: { must: { pct: 40 }, should: { pct: 30 }, could: { pct: 20 } }, evals: [mkEval('e1', 30, tiers)], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const tx = mkScore({ overallPct: 50, tiers, evals: [mkEval('e1', 50, tiers)], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const { root, txRun } = await scaffoldExperiment(t, { ctlScore: ctl, txScore: tx });
+  await runReport({ argv: ['--experiment', 'demo'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /No earlier mark to compare against/);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.prevTrend, null);
+});

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolvePair, listMarks } from '../lib/run-pair.js';
+import { resolvePair, listMarks, resolvePrevVariant } from '../lib/run-pair.js';
 
 async function scaffold(t, structure) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-pair-'));
@@ -64,4 +64,50 @@ test('resolvePair: explicit spec parses correctly', async (t) => {
 
 test('resolvePair: malformed explicit spec throws', async () => {
   await assert.rejects(() => resolvePair('/x', 'garbage'), /must be 'latest'/);
+});
+
+test('resolvePrevVariant: returns nulls when current is not a mark', async (t) => {
+  const root = await scaffold(t, ['variants/control/runs/2026-01-01']);
+  const r = await resolvePrevVariant(root, null);
+  assert.equal(r.prevVariantName, null);
+  assert.equal(r.prevVariantRun, null);
+});
+
+test('resolvePrevVariant: returns nulls when no earlier mark exists', async (t) => {
+  const root = await scaffold(t, ['variants/mark-1/runs/2026-02-01']);
+  const r = await resolvePrevVariant(root, 'mark-1');
+  assert.equal(r.prevVariantName, null);
+  assert.equal(r.prevVariantRun, null);
+});
+
+test('resolvePrevVariant: resolves the highest mark below current', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-2/runs/2026-02-15',
+    'variants/mark-5/runs/2026-03-01',
+  ]);
+  const r = await resolvePrevVariant(root, 'mark-5');
+  assert.equal(r.prevVariantName, 'mark-2');
+  assert.match(r.prevVariantRun, /2026-02-15$/);
+});
+
+test('resolvePrevVariant: picks the latest run of the previous mark', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-1/runs/2026-02-10',
+    'variants/mark-2/runs/2026-03-01',
+  ]);
+  const r = await resolvePrevVariant(root, 'mark-2');
+  assert.equal(r.prevVariantName, 'mark-1');
+  assert.match(r.prevVariantRun, /2026-02-10$/);
+});
+
+test('resolvePrevVariant: returns nulls when previous mark has no runs', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1',
+    'variants/mark-2/runs/2026-03-01',
+  ]);
+  const r = await resolvePrevVariant(root, 'mark-2');
+  assert.equal(r.prevVariantName, null);
+  assert.equal(r.prevVariantRun, null);
 });

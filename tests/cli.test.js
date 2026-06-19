@@ -41,7 +41,7 @@ function run(args, { cwd = REPO_ROOT } = {}) {
 test('CLI: no args prints usage and exits 0', async () => {
   const r = await run([]);
   assert.equal(r.code, 0);
-  assert.match(r.stdout, /forge 0\.6\.0 - Local-first CLI harness for paired control\/variant experiments/);
+  assert.match(r.stdout, /forge 0\.7\.0 - Local-first CLI harness for paired control\/variant experiments/);
   assert.match(r.stdout, /Commands:/);
   assert.match(r.stdout, /propose/);
   assert.match(r.stdout, /artifact-check/);
@@ -57,7 +57,7 @@ test('CLI: --help exits 0 with usage', async () => {
 test('CLI: --version prints package version', async () => {
   const r = await run(['--version']);
   assert.equal(r.code, 0);
-  assert.equal(r.stdout.trim(), '0.6.0');
+  assert.equal(r.stdout.trim(), '0.7.0');
 });
 
 test('CLI: schema emits JSON command catalog', async () => {
@@ -66,7 +66,7 @@ test('CLI: schema emits JSON command catalog', async () => {
   assert.equal(r.stderr, '');
   const schema = JSON.parse(r.stdout);
   assert.equal(schema.schemaVersion, 1);
-  assert.equal(schema.cliVersion, '0.6.0');
+  assert.equal(schema.cliVersion, '0.7.0');
   assert.deepEqual(schema.envelope.successEnvelope, ['ok', 'command', 'data']);
   assert.deepEqual(schema.envelope.errorEnvelope, ['ok', 'command', 'error', 'code', 'hint']);
   assert.ok(schema.errorCodes.some(e => e.code === 'CONFLICT'), 'CONFLICT documented in errorCodes');
