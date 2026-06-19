@@ -24,6 +24,15 @@ before(async () => {
     evals: [],
     defaults: { samples: 1 },
   }, null, 2) + '\n');
+  // A minimal run.js that records the argv it was spawned with, so a test can
+  // assert exactly which flags `forge resample` forwarded to the runbook.
+  await fs.writeFile(path.join(TEST_RUNBOOK_DIR, 'run.js'),
+    `import { promises as fs } from 'node:fs';\n` +
+    `import path from 'node:path';\n` +
+    `const expIdx = process.argv.indexOf('--experiment');\n` +
+    `const exp = process.argv[expIdx + 1];\n` +
+    `const out = path.join(process.cwd(), 'experiments', exp, 'argv.json');\n` +
+    `await fs.writeFile(out, JSON.stringify(process.argv.slice(2)));\n`);
 });
 
 after(async () => {
@@ -87,6 +96,32 @@ test('resample: missing variant errors', async () => {
     assert.match(r.err, /<variant> required/);
   } finally {
     await cleanup(); 
+  }
+});
+
+test('resample: forwards run flags but not --eval/--sample', async () => {
+  const name = `_t_resampfwd_${Date.now()}`; const { cleanup } = await tmpExperimentsSnapshot(name); try {
+    let r = await runCli(['new-experiment', name, '--runbook', RUNBOOK_ID]);
+    assert.equal(r.code, 0, r.err);
+    r = await runCli(['resample', name, 'mark-1', '--eval', 'e1', '--sample', '3',
+      '--spfx-dev-server', 'https://localhost:46435/', '--capture']);
+    assert.equal(r.code, 0, r.err);
+    const argv = JSON.parse(await fs.readFile(
+      path.join(REPO_ROOT, 'experiments', name, 'argv.json'), 'utf8'));
+    // The single-sample contract rides in --resample-only; --eval/--sample are
+    // NOT forwarded as run flags.
+    assert.ok(argv.includes('--resample-only'), 'forwards --resample-only');
+    assert.equal(argv[argv.indexOf('--resample-only') + 1], 'e1:3');
+    assert.ok(!argv.includes('--eval'), '--eval is not forwarded');
+    assert.ok(!argv.includes('--sample'), '--sample is not forwarded');
+    // Remaining run flags (the runbook may hard-require them) ARE forwarded.
+    assert.ok(argv.includes('--spfx-dev-server'), 'forwards --spfx-dev-server');
+    assert.equal(argv[argv.indexOf('--spfx-dev-server') + 1], 'https://localhost:46435/');
+    assert.ok(argv.includes('--capture'), 'forwards --capture');
+    assert.ok(argv.includes('--variant'), 'forwards --variant');
+    assert.equal(argv[argv.indexOf('--variant') + 1], 'mark-1');
+  } finally {
+    await cleanup();
   }
 });
 
