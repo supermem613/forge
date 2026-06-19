@@ -6,6 +6,21 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runJudge } from '../lib/judge-orchestrator.js';
+import { REQUIRED_JUDGE_MODEL } from '../lib/judge.js';
+
+// Write a verdict file that classifies as 'valid' (model present, shape ok, no
+// criteriaHash so the stale-criteria check is skipped). One must criterion.
+async function writeValidVerdict(runDir, evalId, sample) {
+  const dir = path.join(runDir, 'judge-verdicts');
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, `${evalId}-sample${sample}.json`), JSON.stringify({
+    evalId, sample, model: REQUIRED_JUDGE_MODEL, promptVersion: 1,
+    criteria_results: {
+      must: [{ criterion: 'm', pass: true, reasoning: 'ok', evidence: [] }],
+      should: [], could: [],
+    },
+  }));
+}
 
 const MANIFEST = {
   evals: ['evals/01.json', 'evals/02.json'],
@@ -95,15 +110,57 @@ test('runJudge: agent mode auto-fails blocked samples', async (t) => {
   assert.equal(status.processed, 1); // e2 still processed
 });
 
-test('runJudge: collect mode reports missing verdicts', async (t) => {
+test('runJudge: collect mode BLOCKS (throws) on missing verdicts', async (t) => {
   const { root, rb, ctlRun } = await scaffold(t, { withVariant: false });
-  await runJudge({
-    argv: ['--experiment', 'demo', '--mode', 'collect', '--variant', 'control'],
-    runbookDir: rb, repoRoot: root, log: () => {},
-  });
+  await assert.rejects(
+    () => runJudge({
+      argv: ['--experiment', 'demo', '--mode', 'collect', '--variant', 'control'],
+      runbookDir: rb, repoRoot: root, log: () => {},
+    }),
+    (err) => err.code === 'JUDGE_COLLECT_BLOCKED',
+  );
+  // judge-status.json is written before the throw so the blocked set is inspectable.
   const status = JSON.parse(await fs.readFile(path.join(ctlRun, 'judge-status.json'), 'utf8'));
   assert.equal(status.missing.length, 2);
   assert.equal(status.processed, 0);
+});
+
+test('runJudge: collect mode BLOCKS (throws) on invalid verdicts', async (t) => {
+  const { root, rb, ctlRun } = await scaffold(t, { withVariant: false });
+  // Both reps present but wrong-shape (uses "criteria" not "criteria_results").
+  const vdir = path.join(ctlRun, 'judge-verdicts');
+  await fs.mkdir(vdir, { recursive: true });
+  for (const eid of ['e1', 'e2']) {
+    await fs.writeFile(path.join(vdir, `${eid}-sample1.json`), JSON.stringify({
+      evalId: eid, sample: 1, model: REQUIRED_JUDGE_MODEL, promptVersion: 1,
+      criteria: [{ id: 'must.1', verdict: 'PASS' }],
+    }));
+  }
+  await assert.rejects(
+    () => runJudge({
+      argv: ['--experiment', 'demo', '--mode', 'collect', '--variant', 'control'],
+      runbookDir: rb, repoRoot: root, log: () => {},
+    }),
+    (err) => err.code === 'JUDGE_COLLECT_BLOCKED',
+  );
+  const status = JSON.parse(await fs.readFile(path.join(ctlRun, 'judge-status.json'), 'utf8'));
+  assert.equal(status.invalid.length, 2);
+});
+
+test('runJudge: collect mode does NOT throw when all verdicts present and valid', async (t) => {
+  const { root, rb, ctlRun } = await scaffold(t, { withVariant: false });
+  await writeValidVerdict(ctlRun, 'e1', 1);
+  await writeValidVerdict(ctlRun, 'e2', 1);
+  const logs = [];
+  await runJudge({
+    argv: ['--experiment', 'demo', '--mode', 'collect', '--variant', 'control'],
+    runbookDir: rb, repoRoot: root, log: (m) => logs.push(m),
+  });
+  assert.ok(logs.some(l => l.includes('all verdicts present and valid')));
+  const status = JSON.parse(await fs.readFile(path.join(ctlRun, 'judge-status.json'), 'utf8'));
+  assert.equal(status.processed, 2);
+  assert.equal(status.missing.length, 0);
+  assert.equal(status.invalid.length, 0);
 });
 
 test('runJudge: rejects bad mode', async (t) => {
