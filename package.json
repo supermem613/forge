@@ -1,6 +1,6 @@
 {
   "name": "forge",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "description": "Local-first CLI harness for paired control/variant experiments with reusable runbooks, scoring, judging, and reports.",
   "license": "MIT",

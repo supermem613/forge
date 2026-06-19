@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runJudge } from '../lib/judge-orchestrator.js';
 import { normalizeEval } from '../lib/eval-loader.js';
+import { REQUIRED_JUDGE_MODEL } from '../lib/judge.js';
 
 const MANIFEST = { evals: ['evals/01.json', 'evals/02.json'] };
 
@@ -39,7 +40,7 @@ async function writeStaleVerdict(runDir, evalId, criteria) {
   const dir = path.join(runDir, 'judge-verdicts');
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, `${evalId}-sample1.json`), JSON.stringify({
-    evalId, sample: 1, model: 'gpt-5.4', promptVersion: 1,
+    evalId, sample: 1, model: REQUIRED_JUDGE_MODEL, promptVersion: 1,
     criteriaHash: 'deadbeef'.repeat(8), // wrong hash
     criteria_results: {
       must: criteria.must.map(c => ({ criterion: typeof c === 'string' ? c : c.text, pass: true, reasoning: 'old', evidence: [] })),
@@ -54,7 +55,7 @@ test('refit-stale: skips valid verdicts; refits stale to sibling dir', async (t)
   // verdict for e2 (different criteriaHash).
   const e1Norm = normalizeEval(evals.e1);
   const validE1 = {
-    evalId: 'e1', sample: 1, model: 'gpt-5.4', promptVersion: 1,
+    evalId: 'e1', sample: 1, model: REQUIRED_JUDGE_MODEL, promptVersion: 1,
     criteriaHash: e1Norm.criteriaHash,
     criteria_results: {
       must: [{ criterion: 'original-m1', pass: true, reasoning: 'r', evidence: [] }],
@@ -113,7 +114,7 @@ test('refit-stale: collect reads from refit dir keyed by expected hash', async (
   for (const ev of [normalizeEval(evals.e1), normalizeEval(evals.e2)]) {
     const refitDir = path.join(ctlRun, 'judge-verdicts-refit', ev.criteriaHash);
     await fs.writeFile(path.join(refitDir, `${ev.id}-sample1.json`), JSON.stringify({
-      evalId: ev.id, sample: 1, model: 'gpt-5.4', promptVersion: 1,
+      evalId: ev.id, sample: 1, model: REQUIRED_JUDGE_MODEL, promptVersion: 1,
       criteriaHash: ev.criteriaHash,
       criteria_results: {
         must: ev.criteria.must.map(c => ({ criterion: c.text, pass: true, reasoning: 'r', evidence: [] })),

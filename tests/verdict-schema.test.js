@@ -127,7 +127,7 @@ test('buildCriteriaPrompt: includes model + promptVersion + criteriaHash placeho
   const prompt = buildCriteriaPrompt({
     evalId: 'e', sample: 1, criteria: CRITERIA, criteriaHash: HASH, artifact: { x: 1 },
   });
-  assert.match(prompt, /"model": "gpt-5.4"/);
+  assert.match(prompt, new RegExp(`"model": "${REQUIRED_JUDGE_MODEL}"`));
   assert.match(prompt, /"promptVersion": 1/);
   assert.match(prompt, /"criteriaHash": "deadbeef/);
   // Criterion text rendered (not [object Object])
@@ -140,7 +140,7 @@ test('buildCriteriaPrompt: omits criteriaHash gracefully when not provided', () 
     evalId: 'e', sample: 1, criteria: CRITERIA, artifact: 'art',
   });
   assert.doesNotMatch(prompt, /"criteriaHash":/);
-  assert.match(prompt, /"model": "gpt-5.4"/);
+  assert.match(prompt, new RegExp(`"model": "${REQUIRED_JUDGE_MODEL}"`));
 });
 
 test('readVerdictForRep: missing file → classification:missing', async (t) => {

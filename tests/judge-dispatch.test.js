@@ -6,12 +6,13 @@ import path from 'node:path';
 import {
   buildDispatchPrompt, validateVerdictDir, summarizeValidation,
 } from '../lib/judge-dispatch.js';
+import { REQUIRED_JUDGE_MODEL } from '../lib/judge.js';
 
 test('buildDispatchPrompt names the required model', () => {
   const p = buildDispatchPrompt({
     controlRun: '/runs/c', variantRun: '/runs/v', variantName: 'mark-2',
   });
-  assert.match(p, /gpt-5\.4/);
+  assert.match(p, new RegExp(REQUIRED_JUDGE_MODEL.replace('.', '\\.')));
   assert.match(p, /promptVersion/);
 });
 
@@ -75,7 +76,7 @@ test('validateVerdictDir: classifies valid + malformed files', async (t) => {
   // Valid verdict
   await fs.writeFile(path.join(verdictDir, 'demo-sample1.json'), JSON.stringify({
     evalId: 'demo', sample: 1,
-    model: 'gpt-5.4', promptVersion: 1, criteriaHash: 'h',
+    model: REQUIRED_JUDGE_MODEL, promptVersion: 1, criteriaHash: 'h',
     criteria_results: {
       must:   [{ criterion: 'must-1',   pass: true,  reasoning: 'ok', evidence: [] }],
       should: [{ criterion: 'should-1', pass: false, reasoning: 'no', evidence: [] }],
@@ -84,7 +85,7 @@ test('validateVerdictDir: classifies valid + malformed files', async (t) => {
   }));
   // Wrong-shape verdict (uses "criteria" not "criteria_results")
   await fs.writeFile(path.join(verdictDir, 'demo-sample2.json'), JSON.stringify({
-    evalId: 'demo', sample: 2, model: 'gpt-5.4', promptVersion: 1, criteriaHash: 'h',
+    evalId: 'demo', sample: 2, model: REQUIRED_JUDGE_MODEL, promptVersion: 1, criteriaHash: 'h',
     criteria: [{ id: 'must.1', verdict: 'PASS', rationale: 'ok' }],
   }));
   // Unparseable file
