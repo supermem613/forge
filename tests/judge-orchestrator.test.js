@@ -195,6 +195,24 @@ test('runJudge: single-turn artifact surfaces turn1 response text', async (t) =>
   assert.ok(!prompt.includes('Stage 2 — Exercise'), 'single-turn artifact must not render a Stage 2 section');
 });
 
+test('runJudge: single-turn artifact surfaces model reasoning chain of thought', async (t) => {
+  const { root, rb, ctlRun } = await scaffold(t, { withVariant: false });
+  // kash >= 1.7.0 carries the model's ChainOfThought in response.reasoning
+  // (ordered segments). The judge must see it so reasoning informs the verdict.
+  await fs.writeFile(path.join(ctlRun, 'turn1', 'e1-sample1.json'),
+    JSON.stringify({ prompt: 'p', response: {
+      toolDetails: [], text: 'ANSWER_XYZ_42',
+      reasoning: ['REASON_SEG_ALPHA list the library first', 'REASON_SEG_BETA then filter by extension'],
+    } }));
+  await runJudge({
+    argv: ['--experiment', 'demo', '--mode', 'agent', '--variant', 'control'],
+    runbookDir: rb, repoRoot: root, log: () => {},
+  });
+  const prompt = await fs.readFile(path.join(ctlRun, 'judge-prompts', 'e1-sample1.md'), 'utf8');
+  assert.ok(prompt.includes('REASON_SEG_ALPHA'), 'judge prompt must include reasoning segment 1');
+  assert.ok(prompt.includes('REASON_SEG_BETA'), 'judge prompt must include reasoning segment 2');
+});
+
 test('runJudge: skips run with no results.json', async (t) => {
   const { root, rb, ctlRun } = await scaffold(t, { withVariant: false, results: false });
   const logs = [];
