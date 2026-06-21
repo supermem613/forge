@@ -216,3 +216,131 @@ test('runReport: first mark reports no previous to compare against', async (t) =
   const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
   assert.equal(json.prevTrend, null);
 });
+
+test('runReport: --prev pins an explicit baseline mark instead of N-1', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-report-prev-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const expDir = path.join(root, 'experiments', 'demo');
+  const ctl = mkScore({ overallPct: 30, tiers: tiers(30, 30, 30), evals: [mkEval('e1', 30, tiers(30, 30, 30))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m1 = mkScore({ overallPct: 50, tiers: tiers(50, 50, 50), evals: [mkEval('e1', 50, tiers(50, 50, 50))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m2 = mkScore({ overallPct: 90, tiers: tiers(90, 90, 90), evals: [mkEval('e1', 90, tiers(90, 90, 90))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m3 = mkScore({ overallPct: 70, tiers: tiers(70, 70, 70), evals: [mkEval('e1', 70, tiers(70, 70, 70))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  for (const [variant, score] of [['control', ctl], ['mark-1', m1], ['mark-2', m2], ['mark-3', m3]]) {
+    const dir = path.join(expDir, 'variants', variant, 'runs', NOW);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'score.json'), JSON.stringify(score));
+  }
+  const txRun = path.join(expDir, 'variants', 'mark-3', 'runs', NOW);
+  await runReport({ argv: ['--experiment', 'demo', '--prev', 'mark-1'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /Trend vs previous mark \(mark-1\)/);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.prevVariant, 'mark-1');
+  // mark-3 (70%) vs pinned mark-1 (50%) = +20pp, NOT vs N-1 default mark-2 (90%).
+  assert.equal(json.prevTrend.overall, 20);
+});
+
+test('runReport: --prev pinned to an unscored mark fails loudly', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-report-prevbad-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const expDir = path.join(root, 'experiments', 'demo');
+  const ctl = mkScore({ overallPct: 30, tiers: tiers(30, 30, 30), evals: [mkEval('e1', 30, tiers(30, 30, 30))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m2 = mkScore({ overallPct: 70, tiers: tiers(70, 70, 70), evals: [mkEval('e1', 70, tiers(70, 70, 70))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  for (const [variant, score] of [['control', ctl], ['mark-2', m2]]) {
+    const dir = path.join(expDir, 'variants', variant, 'runs', NOW);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'score.json'), JSON.stringify(score));
+  }
+  // mark-1 has a run dir but NO score.json.
+  await fs.mkdir(path.join(expDir, 'variants', 'mark-1', 'runs', NOW), { recursive: true });
+  await assert.rejects(
+    () => runReport({ argv: ['--experiment', 'demo', '--prev', 'mark-1'], repoRoot: root, log: () => {} }),
+    /score\.json/,
+  );
+});
+
+test('runReport: bare --prev with no value fails usage', async () => {
+  await assert.rejects(
+    () => runReport({ argv: ['--experiment', 'demo', '--prev'], repoRoot: '/x', log: () => {} }),
+    /--prev/,
+  );
+});
+
+test('runReport: renders reasoning capture health for control, variant, previous', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-report-cap-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const expDir = path.join(root, 'experiments', 'demo');
+  const ctl = mkScore({ overallPct: 30, tiers: tiers(30, 30, 30), evals: [mkEval('e1', 30, tiers(30, 30, 30))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m1 = mkScore({ overallPct: 50, tiers: tiers(50, 50, 50), evals: [mkEval('e1', 50, tiers(50, 50, 50))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m2 = mkScore({ overallPct: 70, tiers: tiers(70, 70, 70), evals: [mkEval('e1', 70, tiers(70, 70, 70))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  for (const [variant, score] of [['control', ctl], ['mark-1', m1], ['mark-2', m2]]) {
+    const dir = path.join(expDir, 'variants', variant, 'runs', NOW);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'score.json'), JSON.stringify(score));
+  }
+  const txRun = path.join(expDir, 'variants', 'mark-2', 'runs', NOW);
+  const pair = {
+    efficiency: { latencyMs: { control: 1000, variant: 800, delta: 200, pctSaved: 20 } },
+    captureHealth: {
+      control: { meanSegsPerCall: 0.7, n: 5, zeroSegMultiCall: 1 },
+      variant: { meanSegsPerCall: 1.0, n: 5, zeroSegMultiCall: 0 },
+      previous: { meanSegsPerCall: 0.72, n: 5, zeroSegMultiCall: 1 },
+    },
+    codeMode: { control: { engaged: 0, total: 3, pct: 0 }, variant: { engaged: 3, total: 3, pct: 100 } },
+  };
+  await fs.writeFile(path.join(txRun, 'pair.json'), JSON.stringify(pair));
+  await runReport({ argv: ['--experiment', 'demo', '--prev', 'mark-1'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /Reasoning capture health/i);
+  assert.match(md, /0\.7/);
+  assert.match(md, /1\b/);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.captureHealth.variant.meanSegsPerCall, 1.0);
+  assert.equal(json.captureHealth.variant.zeroSegMultiCall, 0);
+  assert.equal(json.captureHealth.previous.meanSegsPerCall, 0.72);
+});
+
+test('runReport: renders the full efficiency metric set across three columns', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-report-eff3-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const expDir = path.join(root, 'experiments', 'demo');
+  const ctl = mkScore({ overallPct: 30, tiers: tiers(30, 30, 30), evals: [mkEval('e1', 30, tiers(30, 30, 30))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m1 = mkScore({ overallPct: 50, tiers: tiers(50, 50, 50), evals: [mkEval('e1', 50, tiers(50, 50, 50))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  const m2 = mkScore({ overallPct: 70, tiers: tiers(70, 70, 70), evals: [mkEval('e1', 70, tiers(70, 70, 70))], eligibleSamples: 3, totalSamplesAcrossEvals: 3 });
+  for (const [variant, score] of [['control', ctl], ['mark-1', m1], ['mark-2', m2]]) {
+    const dir = path.join(expDir, 'variants', variant, 'runs', NOW);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'score.json'), JSON.stringify(score));
+  }
+  const txRun = path.join(expDir, 'variants', 'mark-2', 'runs', NOW);
+  const pair = {
+    efficiency: {
+      latencyMs: { control: 1000, variant: 800, delta: 200, pctSaved: 20 },
+      totalTokens: { control: 5000, variant: 4000, delta: 1000, pctSaved: 20 },
+    },
+    threeWay: {
+      prevVariant: 'mark-1',
+      efficiency: {
+        latencyMs: { control: 1000, previous: 950, variant: 800, deltaVsPrev: 150, pctSavedVsPrev: 15.79 },
+        totalTokens: { control: 5000, previous: 4500, variant: 4000, deltaVsPrev: 500, pctSavedVsPrev: 11.11 },
+      },
+      quality: { control: 30, previous: 50, variant: 70, deltaPpVsPrev: 20 },
+    },
+    codeMode: { control: { engaged: 0, total: 3, pct: 0 }, variant: { engaged: 3, total: 3, pct: 100 } },
+  };
+  await fs.writeFile(path.join(txRun, 'pair.json'), JSON.stringify(pair));
+  await runReport({ argv: ['--experiment', 'demo', '--prev', 'mark-1'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  // All efficiency metrics rendered across control · mark-1 · mark-2.
+  assert.match(md, /## Efficiency/);
+  assert.match(md, /latency ms/);
+  assert.match(md, /total tokens/);
+  // Three-way row carries control, previous, current, and Δ-vs-prev for a metric.
+  assert.match(md, /\| latency ms \| 1,000 \| 950 \| 800 \|/);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.efficiencyThreeWay.totalTokens.pctSavedVsPrev, 11.11);
+});

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolvePair, listMarks, resolvePrevVariant } from '../lib/run-pair.js';
+import { resolvePair, listMarks, resolvePrevVariant, resolvePrevScore } from '../lib/run-pair.js';
 
 async function scaffold(t, structure) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-pair-'));
@@ -110,4 +110,73 @@ test('resolvePrevVariant: returns nulls when previous mark has no runs', async (
   const r = await resolvePrevVariant(root, 'mark-2');
   assert.equal(r.prevVariantName, null);
   assert.equal(r.prevVariantRun, null);
+});
+
+test('resolvePrevVariant: prevOverride pins an explicit mark instead of N-1', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-12/runs/2026-05-01',
+    'variants/mark-14/runs/2026-06-01',
+  ]);
+  const r = await resolvePrevVariant(root, 'mark-14', 'mark-1');
+  assert.equal(r.prevVariantName, 'mark-1');
+  assert.match(r.prevVariantRun, /2026-02-01$/);
+});
+
+test('resolvePrevVariant: prevOverride picks the latest run of the pinned mark', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-1/runs/2026-02-10',
+    'variants/mark-14/runs/2026-06-01',
+  ]);
+  const r = await resolvePrevVariant(root, 'mark-14', 'mark-1');
+  assert.equal(r.prevVariantName, 'mark-1');
+  assert.match(r.prevVariantRun, /2026-02-10$/);
+});
+
+test('resolvePrevVariant: prevOverride for a mark with no runs throws', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1',
+    'variants/mark-14/runs/2026-06-01',
+  ]);
+  await assert.rejects(() => resolvePrevVariant(root, 'mark-14', 'mark-1'), /no runs/);
+});
+
+test('resolvePrevVariant: prevOverride for a nonexistent mark throws', async (t) => {
+  const root = await scaffold(t, ['variants/mark-14/runs/2026-06-01']);
+  await assert.rejects(() => resolvePrevVariant(root, 'mark-14', 'mark-9'), /no runs/);
+});
+
+test('resolvePrevVariant: malformed prevOverride throws', async (t) => {
+  const root = await scaffold(t, ['variants/mark-14/runs/2026-06-01']);
+  await assert.rejects(() => resolvePrevVariant(root, 'mark-14', 'garbage'), /must be a mark/);
+});
+
+test('resolvePrevScore: loads the pinned baseline score.json', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-14/runs/2026-06-01',
+  ]);
+  await fs.writeFile(path.join(root, 'variants/mark-1/runs/2026-02-01/score.json'), JSON.stringify({ overallPct: 50 }));
+  const r = await resolvePrevScore(root, 'mark-14', 'mark-1');
+  assert.equal(r.prevVariantName, 'mark-1');
+  assert.equal(r.prevScore.overallPct, 50);
+});
+
+test('resolvePrevScore: pinned baseline without score.json fails loudly', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-14/runs/2026-06-01',
+  ]);
+  await assert.rejects(() => resolvePrevScore(root, 'mark-14', 'mark-1'), /score\.json/);
+});
+
+test('resolvePrevScore: default N-1 baseline without score.json degrades to null', async (t) => {
+  const root = await scaffold(t, [
+    'variants/mark-1/runs/2026-02-01',
+    'variants/mark-2/runs/2026-06-01',
+  ]);
+  const r = await resolvePrevScore(root, 'mark-2');
+  assert.equal(r.prevVariantName, 'mark-1');
+  assert.equal(r.prevScore, null);
 });
