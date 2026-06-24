@@ -59,21 +59,21 @@ test('buildPresentation: emits headline + tiers from REPORT.json', async (t) => 
   assert.match(out, /should.*\+15\.0pp/);
 });
 
-test('buildPresentation: includes learnings, contrasts, heatmap, next-step', async (t) => {
+test('buildPresentation: includes data-only learnings, contrasts, heatmap; no prescriptions', async (t) => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-present-'));
   t.after(() => fs.rm(tmp, { recursive: true, force: true }));
   await makeExp(tmp, 'demo');
   const out = await buildPresentation({ experiment: 'demo', repoRoot: tmp });
   assert.match(out, /Mark-1 unblocks cold-start activation/);
-  assert.match(out, /Increase samples/);
   assert.match(out, /Loaded skill before create/);
   assert.match(out, /Cited turns in answer/);
   assert.match(out, /Per-sample heatmap/);
   assert.match(out, /eval-a/);
   // AF (auto-failed) should render in the heatmap for sample 2.
   assert.match(out, /AF/);
-  assert.match(out, /Suggested next step/);
-  assert.match(out, /promoting/);  // overall +10pp suggests promote
+  // Prescriptive content lives in `forge recommend`, so present points there.
+  assert.match(out, /## Recommendations/);
+  assert.match(out, /forge recommend demo/);
 });
 
 test('buildPresentation: errors clearly when REPORT.json missing', async (t) => {
@@ -100,7 +100,7 @@ test('buildPresentation: control-only baseline raises clear error', async (t) =>
   );
 });
 
-test('buildPresentation: regression headline suggests inspecting movements', async (t) => {
+test('buildPresentation: stays data-only and points to recommend regardless of headline sign', async (t) => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-present-'));
   t.after(() => fs.rm(tmp, { recursive: true, force: true }));
   const { txRunDir } = await makeExp(tmp, 'regress');
@@ -109,5 +109,6 @@ test('buildPresentation: regression headline suggests inspecting movements', asy
   r.headline.overall = -8.0;
   await fs.writeFile(path.join(txRunDir, 'REPORT.json'), JSON.stringify(r));
   const out = await buildPresentation({ experiment: 'regress', repoRoot: tmp });
-  assert.match(out, /regressing|regression/i);
+  assert.match(out, /Overall: -8\.0pp/);
+  assert.match(out, /forge recommend regress/);
 });

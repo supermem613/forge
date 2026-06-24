@@ -88,6 +88,35 @@ test('CLI: schema --summary can filter by command prefix', async () => {
   assert.equal(summary.commandCount, 1);
 });
 
+test('CLI: schema documents recommend, grade, and the quiet global flag', async () => {
+  const r = await run(['schema']);
+  assert.equal(r.code, 0);
+  const schema = JSON.parse(r.stdout);
+  assert.ok(schema.commands.some(c => c.path.join(' ') === 'recommend'), 'recommend documented');
+  assert.ok(schema.commands.some(c => c.path.join(' ') === 'grade'), 'grade documented');
+  assert.ok(schema.globalFlags.some(f => f.name === 'quiet'), 'quiet documented');
+});
+
+test('CLI: <subcommand> --help emits that command schema slice and exits 0', async () => {
+  const r = await run(['recommend', '--help']);
+  assert.equal(r.code, 0);
+  const schema = JSON.parse(r.stdout);
+  assert.equal(schema.schemaVersion, 1);
+  assert.deepEqual(schema.commands.map(c => c.path.join(' ')), ['recommend']);
+});
+
+test('CLI: --quiet suppresses the stderr error echo but keeps the JSON envelope', async () => {
+  const noisy = await run(['recommend', 'no-such-experiment-xyz']);
+  assert.equal(noisy.code, 1);
+  assert.match(noisy.stderr, /forge:/);
+  const quiet = await run(['recommend', 'no-such-experiment-xyz', '--quiet']);
+  assert.equal(quiet.code, 1);
+  assert.equal(quiet.stderr, '');
+  const env = JSON.parse(quiet.stdout);
+  assert.equal(env.ok, false);
+  assert.equal(env.command, 'recommend');
+});
+
 test('CLI: list emits a JSON envelope listing runbooks', async () => {
   const r = await run(['list']);
   assert.equal(r.code, 0);

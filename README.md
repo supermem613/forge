@@ -43,11 +43,19 @@ forge run <experiment> control --samples 3
 forge run <experiment> mark-1 --samples 3
 forge score <experiment> --pair latest
 forge judge <experiment> --pair latest
+forge grade <experiment> --pair latest [--finalize]
 forge report <experiment> --pair latest
+forge recommend <experiment> --pair latest
 forge teardown <experiment>
 forge validate [runbook]
 forge artifact-check <runDir>
 ```
+
+Any command accepts the global `--quiet` flag, which suppresses Forge's own stderr (progress and the final error echo) while leaving the stdout JSON envelope and exit codes unchanged. Use it from shells such as PowerShell that surface native stderr writes as errors even on success.
+
+`forge <subcommand> --help` prints the schema slice for that one command.
+
+`forge report` renders observations only (headline, breakthroughs, pitfalls, tables). Prescriptions (suggestions and the next step) are a separate explicit step under `forge recommend`, which reads the stored `REPORT.json` without recomputing. `forge grade` wraps the judge-then-score pass: phase one runs the judge agent and emits the dispatch contract, and `--finalize` validates, collects, and scores.
 
 Modules may register additional commands, runbook roots, doctor checks, pre-step hooks, and abort cleanup hooks. Forge remains the only CLI driver.
 
