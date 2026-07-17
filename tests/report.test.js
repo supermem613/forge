@@ -81,6 +81,34 @@ test('runReport: emits REPORT.md and REPORT.json into variant run', async (t) =>
   assert.ok(logs.some(l => l.includes('Overall +20.0pp')));
 });
 
+test('runReport: missing sampleMatrix in measured eval summaries', async (t) => {
+  const ctlEval = mkEval('e1', 30, { must: { pct: 40 }, should: { pct: 30 }, could: { pct: 20 } });
+  const txEval = mkEval('e1', 50, { must: { pct: 60 }, should: { pct: 50 }, could: { pct: 40 } });
+  delete ctlEval.sampleMatrix;
+  delete txEval.sampleMatrix;
+
+  const ctl = mkScore({
+    overallPct: 30,
+    tiers: { must: { pct: 40 }, should: { pct: 30 }, could: { pct: 20 } },
+    evals: [ctlEval],
+    samples: 3,
+    eligibleSamples: 3,
+    totalSamplesAcrossEvals: 3,
+  });
+  const tx = mkScore({
+    overallPct: 50,
+    tiers: { must: { pct: 60 }, should: { pct: 50 }, could: { pct: 40 } },
+    evals: [txEval],
+    samples: 3,
+    eligibleSamples: 3,
+    totalSamplesAcrossEvals: 3,
+  });
+  const { root, txRun } = await scaffoldExperiment(t, { ctlScore: ctl, txScore: tx });
+  await runReport({ argv: ['--experiment', 'demo'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /Overall \+20\.0pp/);
+});
+
 test('runReport: reliability without skillBody does not crash', async (t) => {
   // Single-turn runbooks (e.g. spark-scenario-efficiency) emit a reliability
   // object but no skillBody sub-object, since they author no artifact. The byte
