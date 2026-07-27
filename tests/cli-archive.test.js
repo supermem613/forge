@@ -187,12 +187,19 @@ test('archive zips per-run dirs by default', async () => {
     assert.equal(out.zipRuns, true);
     assert.ok(Array.isArray(out.zippedRuns), 'zippedRuns array present');
     assert.ok(out.zippedRuns.length >= 1, 'at least one run zipped');
+    // The integrity gate records one entry per source file.
+    const zipped = out.zippedRuns.find(z => z.zipPath.endsWith('2026-01-01T00-00-00-000.zip'));
+    assert.ok(zipped, 'the populated run was zipped');
+    assert.equal(zipped.srcFiles, 2, 'both source files accounted for');
     // The zip exists, the source run dir does not.
     const zipPath = path.join(out.archiveDirAbsPath, 'variants', 'control', 'runs', '2026-01-01T00-00-00-000.zip');
     await fs.access(zipPath);
     await assert.rejects(fs.access(path.join(out.archiveDirAbsPath, 'variants', 'control', 'runs', '2026-01-01T00-00-00-000')));
-    const zipStat = await fs.stat(zipPath);
-    assert.ok(zipStat.size > 0);
+    const zipBuf = await fs.readFile(zipPath);
+    assert.ok(zipBuf.length > 0);
+    // Real ZIP local-file-header magic (PK\x03\x04), proving a valid archive
+    // was written rather than an empty or junk file.
+    assert.equal(zipBuf.readUInt32LE(0), 0x04034b50, 'zip starts with a local file header');
   } finally {
     await fs.rm(expDir, { recursive: true, force: true });
     await fs.rm(archiveRoot, { recursive: true, force: true });
