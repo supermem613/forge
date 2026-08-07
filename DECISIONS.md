@@ -83,3 +83,20 @@ that one command and exits 0, instead of erroring or printing prose.
 
 **Why.** An agent can ask any command how to call it without parsing the whole
 `forge schema` catalog, and without a separate help format to keep in sync.
+
+## D7: Archive moves; pack-analysis copies; container is tar.zst
+
+**Decision.** Lifecycle retirement uses `forge archive` (moves the experiment,
+optionally packs each run). Shareable audit uses `forge pack-analysis` (copies a
+curated subset, leaves the source). Both write solid `.tar.zst` containers, not
+ZIP. `ARCHIVE.json` sets `runArchiveFormat: "tar.zst"` when runs are packed. The
+CLI flag `--no-zip` still means “do not pack runs”; the name is historical.
+
+**Why.** Full capture trees have tens of thousands of near-duplicate files. ZIP
+compresses per entry and pays large header costs; measured cold-store packs
+shrank about 17× with tar.zst and stay under GitHub’s 100 MB blob limit. Archive
+and pack must not share one verb: move vs copy is a user-visible lifecycle
+difference.
+
+**Out of scope.** summary/full pack depths; rewriting old ZIP blobs in place
+inside git history of external archive repos.

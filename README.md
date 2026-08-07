@@ -47,9 +47,22 @@ forge grade <experiment> --pair latest [--finalize]
 forge report <experiment> --pair latest
 forge recommend <experiment> --pair latest
 forge teardown <experiment>
+forge archive <experiment> --to <archive-root>   # move out; packs runs as .tar.zst
+forge pack-analysis <experiment> --to <out.tar.zst>   # copy audit subset; non-destructive
+forge verify-analysis <out.tar.zst>
 forge validate [runbook]
 forge artifact-check <runDir>
 ```
+
+`forge archive` retires a local experiment into an archive root (for example the
+`forge-archive` repo). By default each run directory becomes
+`variants/<v>/runs/<ts>.tar.zst` (solid tar + zstd). Use `--no-zip` to leave runs
+as loose trees. `ARCHIVE.json` records `runArchiveFormat: "tar.zst"`.
+
+`forge pack-analysis` is different: it **copies** a curated audit pack (reports,
+scores, verdicts, runbook snapshot) and leaves the experiment in place. Captures
+and turn dumps stay out so the pack stays small. Verify with
+`forge verify-analysis`. Depth is `audit` only for now.
 
 Any command accepts the global `--quiet` flag, which suppresses Forge's own stderr (progress and the final error echo) while leaving the stdout JSON envelope and exit codes unchanged. Use it from shells such as PowerShell that surface native stderr writes as errors even on success.
 
