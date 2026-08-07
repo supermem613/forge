@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readZipEntries } from '../lib/zip.js';
+import { readTarZstEntries } from '../lib/tar-zst.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -83,40 +83,43 @@ async function makeExperiment(name, runbookId) {
   return dir;
 }
 
-async function cleanup(name, runbookId, zipPath) {
+async function cleanup(name, runbookId, archivePath) {
   await fs.rm(path.join(REPO_ROOT, 'experiments', name), { recursive: true, force: true });
   if (runbookId) {
     await fs.rm(path.join(REPO_ROOT, 'runbooks', runbookId), { recursive: true, force: true });
   }
-  if (zipPath) {
-    await fs.rm(zipPath, { force: true });
+  if (archivePath) {
+    await fs.rm(archivePath, { force: true });
   }
 }
 
 test('pack-analysis is non-destructive, excludes bulk, and verify-analysis passes', async () => {
   const rb = `_t_pack_rb_${Date.now()}`;
   const name = `_t_pack_${Date.now()}`;
-  const zipPath = path.join(os.tmpdir(), `${name}-audit.zip`);
+  const archivePath = path.join(os.tmpdir(), `${name}-audit.tar.zst`);
   await makeRunbook(rb);
   const expDir = await makeExperiment(name, rb);
   try {
-    const r = await runCli(['pack-analysis', name, '--to', zipPath]);
+    const r = await runCli(['pack-analysis', name, '--to', archivePath]);
     assert.equal(r.code, 0, r.err + r.out);
     const env = JSON.parse(r.out);
     assert.equal(env.ok, true);
     assert.equal(env.command, 'pack-analysis');
     assert.equal(env.data.experiment, name);
     assert.equal(env.data.claimClass, 'audit');
+    assert.equal(env.data.containerFormat, 'tar.zst');
     assert.ok(env.data.includedFiles > 0);
     assert.ok(env.data.excludedBytes > env.data.includedBytes, 'excluded bulk dominates');
-    assert.ok(env.data.zipBytes > 0);
+    assert.ok(env.data.archiveBytes > 0);
 
     // Source still present.
     await fs.access(path.join(expDir, 'experiment.json'));
     await fs.access(path.join(expDir, 'variants', 'mark-1', 'runs', '2026-01-01T00-00-00-000', 'captures', 'big.json'));
 
-    const buf = await fs.readFile(zipPath);
-    const entries = readZipEntries(buf);
+    const buf = await fs.readFile(archivePath);
+    // zstd magic 0xFD2FB528 little-endian
+    assert.equal(buf.readUInt32LE(0), 0xFD2FB528, 'archive starts with zstd magic');
+    const entries = readTarZstEntries(buf);
     assert.ok(entries.has('ANALYSIS.json'));
     assert.ok(entries.has('experiment/experiment.json'));
     assert.ok(entries.has('runbook/manifest.json'));
@@ -139,86 +142,86 @@ test('pack-analysis is non-destructive, excludes bulk, and verify-analysis passe
     assert.ok(analysis.runbook.contentHash);
     assert.ok(analysis.excluded.some(e => e.reason === 'captures-excluded-by-default'));
 
-    const v = await runCli(['verify-analysis', zipPath]);
+    const v = await runCli(['verify-analysis', archivePath]);
     assert.equal(v.code, 0, v.err + v.out);
     const venv = JSON.parse(v.out);
     assert.equal(venv.ok, true);
     assert.equal(venv.data.ok, true);
     assert.equal(venv.data.experiment, name);
   } finally {
-    await cleanup(name, rb, zipPath);
+    await cleanup(name, rb, archivePath);
   }
 });
 
-test('pack-analysis --dry-run does not write zip or touch source', async () => {
+test('pack-analysis --dry-run does not write archive or touch source', async () => {
   const rb = `_t_pack_dry_rb_${Date.now()}`;
   const name = `_t_pack_dry_${Date.now()}`;
-  const zipPath = path.join(os.tmpdir(), `${name}-audit.zip`);
+  const archivePath = path.join(os.tmpdir(), `${name}-audit.tar.zst`);
   await makeRunbook(rb);
   const expDir = await makeExperiment(name, rb);
   try {
-    const r = await runCli(['pack-analysis', name, '--to', zipPath, '--dry-run']);
+    const r = await runCli(['pack-analysis', name, '--to', archivePath, '--dry-run']);
     assert.equal(r.code, 0, r.err + r.out);
     const env = JSON.parse(r.out);
     assert.equal(env.data.dryRun, true);
-    await assert.rejects(fs.access(zipPath));
+    await assert.rejects(fs.access(archivePath));
     await fs.access(path.join(expDir, 'experiment.json'));
   } finally {
-    await cleanup(name, rb, zipPath);
+    await cleanup(name, rb, archivePath);
   }
 });
 
 test('pack-analysis rejects unsupported claim class', async () => {
   const rb = `_t_pack_cls_rb_${Date.now()}`;
   const name = `_t_pack_cls_${Date.now()}`;
-  const zipPath = path.join(os.tmpdir(), `${name}-audit.zip`);
+  const archivePath = path.join(os.tmpdir(), `${name}-audit.tar.zst`);
   await makeRunbook(rb);
   await makeExperiment(name, rb);
   try {
-    const r = await runCli(['pack-analysis', name, '--to', zipPath, '--depth', 'full']);
+    const r = await runCli(['pack-analysis', name, '--to', archivePath, '--depth', 'full']);
     assert.notEqual(r.code, 0);
     assert.match(r.out + r.err, /not supported|deferred|audit/i);
   } finally {
-    await cleanup(name, rb, zipPath);
+    await cleanup(name, rb, archivePath);
   }
 });
 
 test('pack-analysis leaves source when destination exists (conflict)', async () => {
   const rb = `_t_pack_cf_rb_${Date.now()}`;
   const name = `_t_pack_cf_${Date.now()}`;
-  const zipPath = path.join(os.tmpdir(), `${name}-audit.zip`);
+  const archivePath = path.join(os.tmpdir(), `${name}-audit.tar.zst`);
   await makeRunbook(rb);
   const expDir = await makeExperiment(name, rb);
-  await fs.writeFile(zipPath, 'occupied');
+  await fs.writeFile(archivePath, 'occupied');
   try {
-    const r = await runCli(['pack-analysis', name, '--to', zipPath]);
+    const r = await runCli(['pack-analysis', name, '--to', archivePath]);
     assert.notEqual(r.code, 0);
     await fs.access(path.join(expDir, 'experiment.json'));
   } finally {
-    await cleanup(name, rb, zipPath);
+    await cleanup(name, rb, archivePath);
   }
 });
 
-test('verify-analysis fails on tampered zip', async () => {
+test('verify-analysis fails on tampered tar.zst', async () => {
   const rb = `_t_pack_tam_rb_${Date.now()}`;
   const name = `_t_pack_tam_${Date.now()}`;
-  const zipPath = path.join(os.tmpdir(), `${name}-audit.zip`);
+  const archivePath = path.join(os.tmpdir(), `${name}-audit.tar.zst`);
   await makeRunbook(rb);
   await makeExperiment(name, rb);
   try {
-    const r = await runCli(['pack-analysis', name, '--to', zipPath]);
+    const r = await runCli(['pack-analysis', name, '--to', archivePath]);
     assert.equal(r.code, 0, r.err + r.out);
-    // Corrupt trailing bytes enough to break EOCD scan or crc.
-    const fh = await fs.open(zipPath, 'r+');
+    // Corrupt trailing bytes enough to break zstd frame or tar parse.
+    const fh = await fs.open(archivePath, 'r+');
     try {
       const st = await fh.stat();
       await fh.write(Buffer.from([0xff, 0xff, 0xff, 0xff]), 0, 4, Math.max(0, st.size - 8));
     } finally {
       await fh.close();
     }
-    const v = await runCli(['verify-analysis', zipPath]);
+    const v = await runCli(['verify-analysis', archivePath]);
     assert.notEqual(v.code, 0);
   } finally {
-    await cleanup(name, rb, zipPath);
+    await cleanup(name, rb, archivePath);
   }
 });

@@ -171,35 +171,33 @@ test('archive rejects --to inside the source experiment dir', async () => {
   }
 });
 
-test('archive zips per-run dirs by default', async () => {
-  const name = `_t_arch_zip_${Date.now()}`;
+test('archive packs per-run dirs as tar.zst by default', async () => {
+  const name = `_t_arch_tz_1786134898073`;
   const expDir = await makeExperiment(name);
-  // Add a run dir with content so zipping has something to do.
   const runDir = path.join(expDir, 'variants', 'control', 'runs', '2026-01-01T00-00-00-000');
   await fs.mkdir(runDir, { recursive: true });
   await fs.writeFile(path.join(runDir, 'sample-1.json'), JSON.stringify({ x: 1 }));
   await fs.writeFile(path.join(runDir, 'sample-2.json'), JSON.stringify({ x: 2 }));
-  const archiveRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-archive-zip-'));
+  const archiveRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-archive-tz-'));
   try {
     const r = await runCli(['archive', name, '--to', archiveRoot]);
     assert.equal(r.code, 0, r.err);
     const out = JSON.parse(r.out).data;
     assert.equal(out.zipRuns, true);
+    assert.equal(out.runArchiveFormat, 'tar.zst');
     assert.ok(Array.isArray(out.zippedRuns), 'zippedRuns array present');
-    assert.ok(out.zippedRuns.length >= 1, 'at least one run zipped');
-    // The integrity gate records one entry per source file.
-    const zipped = out.zippedRuns.find(z => z.zipPath.endsWith('2026-01-01T00-00-00-000.zip'));
-    assert.ok(zipped, 'the populated run was zipped');
-    assert.equal(zipped.srcFiles, 2, 'both source files accounted for');
-    // The zip exists, the source run dir does not.
-    const zipPath = path.join(out.archiveDirAbsPath, 'variants', 'control', 'runs', '2026-01-01T00-00-00-000.zip');
-    await fs.access(zipPath);
+    assert.ok(out.zippedRuns.length >= 1, 'at least one run packed');
+    const packed = out.zippedRuns.find(z => String(z.archivePath || z.zipPath).endsWith('2026-01-01T00-00-00-000.tar.zst'));
+    assert.ok(packed, 'the populated run was packed as tar.zst');
+    assert.equal(packed.srcFiles, 2, 'both source files accounted for');
+    const archivePath = path.join(out.archiveDirAbsPath, 'variants', 'control', 'runs', '2026-01-01T00-00-00-000.tar.zst');
+    await fs.access(archivePath);
     await assert.rejects(fs.access(path.join(out.archiveDirAbsPath, 'variants', 'control', 'runs', '2026-01-01T00-00-00-000')));
-    const zipBuf = await fs.readFile(zipPath);
-    assert.ok(zipBuf.length > 0);
-    // Real ZIP local-file-header magic (PK\x03\x04), proving a valid archive
-    // was written rather than an empty or junk file.
-    assert.equal(zipBuf.readUInt32LE(0), 0x04034b50, 'zip starts with a local file header');
+    const buf = await fs.readFile(archivePath);
+    assert.ok(buf.length > 0);
+    assert.equal(buf.readUInt32LE(0), 0xFD2FB528, 'archive starts with zstd magic');
+    const manifest = JSON.parse(await fs.readFile(path.join(out.archiveDirAbsPath, 'ARCHIVE.json'), 'utf8'));
+    assert.equal(manifest.runArchiveFormat, 'tar.zst');
   } finally {
     await fs.rm(expDir, { recursive: true, force: true });
     await fs.rm(archiveRoot, { recursive: true, force: true });
