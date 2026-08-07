@@ -1,0 +1,113 @@
+# docs-coverage + stale-term contract for audit-repo.
+name: forge
+
+source_of_truth:
+  file: lib/command-catalog.js
+  extractor: regex
+  # First segment of each CORE_COMMANDS path: ['name'] or ['config','init'] -> config
+  pattern: "path: \\['([a-z][a-z0-9-]*)'"
+  sort: source_order
+  exclude: []
+
+targets:
+  - file: README.md
+    section: { heading: "CLI" }
+    match: code_token
+    # README is the operator landing list, not the full schema catalog.
+    # Keep exempt only for meta/discovery and infrequent ops commands.
+    exempt:
+      - schema
+      - doctor
+      - bump
+      - update
+      - present
+      - runs
+      - adoption
+      - compare
+      - resample
+      - add-eval
+      - new-runbook
+
+  - file: .claude/skills/experiment-pack/SKILL.md
+    section: { heading: "Commands" }
+    match: code_token
+    exempt:
+      - list
+      - experiments
+      - schema
+      - config
+      - new-experiment
+      - propose
+      - setup
+      - run
+      - score
+      - judge
+      - grade
+      - report
+      - present
+      - recommend
+      - teardown
+      - archive
+      - runs
+      - artifact-check
+      - adoption
+      - compare
+      - resample
+      - doctor
+      - validate
+      - update
+      - bump
+      - add-eval
+      - new-runbook
+
+  - file: .claude/skills/experiment-archive/SKILL.md
+    section: whole_file
+    match: code_token
+    exempt:
+      - list
+      - experiments
+      - schema
+      - config
+      - new-experiment
+      - propose
+      - setup
+      - run
+      - score
+      - judge
+      - grade
+      - report
+      - present
+      - recommend
+      - teardown
+      - pack-analysis
+      - verify-analysis
+      - runs
+      - artifact-check
+      - adoption
+      - compare
+      - resample
+      - doctor
+      - validate
+      - update
+      - bump
+      - add-eval
+      - new-runbook
+
+stale_terms:
+  - term: Compress-Archive
+    reason: Replaced by in-process writers; archive/pack use tar.zst, not PowerShell ZIP.
+    allow_in:
+      - lib/zip.js
+
+  - term: application/zip
+    reason: Default run-pack container is tar.zst, not ZIP media type.
+    allow_in: []
+
+  - term: 'runArchiveFormat: "zip"'
+    reason: ARCHIVE.json must record tar.zst when runs are packed.
+    allow_in: []
+
+exclude_globs:
+  - 'experiments/**'
+  - 'node_modules/**'
+  - '.sd/**'

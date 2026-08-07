@@ -19,6 +19,10 @@ Every new bundle opened by `openBundle()` writes:
 
 Runbooks may add domain artifacts such as `run.log`, `results.json`, `signals.json`, `score.json`, `REPORT.json`, `REPORT.md`, `judge-prompts/`, and `judge-verdicts/`.
 
+After `forge archive` with run packing enabled (default), each run directory is
+replaced by a sibling `runs/<timestamp>.tar.zst` solid archive. Loose run trees
+remain the live workspace form under `experiments/`.
+
 ## manifest.json
 
 ```json
