@@ -1,19 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { gitPullMadeNoChanges, interpretSodaPull, isSodaManaged, updateForge } from '../lib/cli-update.js';
+import {
+  gitPullMadeNoChanges,
+  hasSodaWorkspaceMarkers,
+  interpretSodaPull,
+  isSodaGitInterlockError,
+  isSodaManaged,
+  probeSodaStatus,
+  updateForge,
+} from '../lib/cli-update.js';
 
 function ok(out = '') {
   return { ok: true, code: 0, out, err: '' };
 }
+
+function sodaStatus(initialized) {
+  return ok(JSON.stringify({ ok: true, command: 'status', data: { summary: { initialized } } }));
+}
+
+function sodaPull(outcomes) {
+  return ok(JSON.stringify({ ok: true, command: 'pull', data: outcomes }));
+}
+
+const noMarkers = () => false;
 
 test('updateForge skips root install and link when root git pull made no changes', async () => {
   const calls = [];
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
@@ -35,10 +54,11 @@ test('updateForge runs root install and link when root git pull returns changes'
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
-        return ok('Fast-forward\n package.json | 2 +-');
+        return ok('Fast-forward' + '\n' + ' package.json | 2 +-');
       }
       return ok();
     },
@@ -61,12 +81,13 @@ test('updateForge skips submodule install and build when submodule git pull made
     const result = await updateForge({
       log: () => {},
       getSubmodules: async () => [submoduleDir],
+      hasMarkers: noMarkers,
       runCommand: (cmd, args, cwd) => {
         calls.push({ cmd, args, cwd });
         if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
           return cwd === submoduleDir
             ? ok('Already up-to-date.')
-            : ok('Fast-forward\n package.json | 2 +-');
+            : ok('Fast-forward' + '\n' + ' package.json | 2 +-');
         }
         return ok();
       },
@@ -87,22 +108,15 @@ test('updateForge skips submodule install and build when submodule git pull made
 test('gitPullMadeNoChanges recognizes current and legacy git output', () => {
   assert.equal(gitPullMadeNoChanges('Already up to date.'), true);
   assert.equal(gitPullMadeNoChanges('Already up-to-date.'), true);
-  assert.equal(gitPullMadeNoChanges('Updating abc..def\nFast-forward'), false);
+  assert.equal(gitPullMadeNoChanges('Updating abc..def' + '\n' + 'Fast-forward'), false);
 });
-
-function sodaStatus(initialized) {
-  return ok(JSON.stringify({ ok: true, command: 'status', data: { summary: { initialized } } }));
-}
-
-function sodaPull(outcomes) {
-  return ok(JSON.stringify({ ok: true, command: 'pull', data: outcomes }));
-}
 
 test('updateForge pulls with sd and runs install, build, and link in a soda-managed repo', async () => {
   const calls = [];
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'sd' && args.join(' ') === 'status') {
@@ -132,6 +146,7 @@ test('updateForge skips install, build, and link when sd pull left the worktree 
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'sd' && args.join(' ') === 'status') {
@@ -157,13 +172,14 @@ test('updateForge falls back to git pull when the repo is a plain git checkout',
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'sd' && args.join(' ') === 'status') {
-        return ok(JSON.stringify({ ok: true, command: 'status', data: { summary: { initialized: false } } }));
+        return sodaStatus(false);
       }
       if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
-        return ok('Fast-forward\n package.json | 2 +-');
+        return ok('Fast-forward' + '\n' + ' package.json | 2 +-');
       }
       return ok();
     },
@@ -182,13 +198,14 @@ test('updateForge falls back to git pull when sd is not installed', async () => 
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'sd') {
         return { ok: false, code: 1, out: '', err: "'sd' is not recognized" };
       }
       if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
-        return ok('Fast-forward\n package.json | 2 +-');
+        return ok('Fast-forward' + '\n' + ' package.json | 2 +-');
       }
       return ok();
     },
@@ -206,13 +223,14 @@ test('updateForge falls back to git pull when sd status output is unparseable', 
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'sd' && args.join(' ') === 'status') {
         return ok('not json at all');
       }
       if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
-        return ok('Fast-forward\n package.json | 2 +-');
+        return ok('Fast-forward' + '\n' + ' package.json | 2 +-');
       }
       return ok();
     },
@@ -230,6 +248,7 @@ test('updateForge fails with the sd envelope error when sd pull fails', async ()
   const result = await updateForge({
     log: () => {},
     getSubmodules: async () => [],
+    hasMarkers: noMarkers,
     runCommand: (cmd, args, cwd) => {
       calls.push({ cmd, args, cwd });
       if (cmd === 'sd' && args.join(' ') === 'status') {
@@ -270,8 +289,112 @@ test('interpretSodaPull reports a change only when some outcome updated the work
 });
 
 test('isSodaManaged is true only for an initialized soda workspace', () => {
-  assert.equal(isSodaManaged('/repo', () => sodaStatus(true)), true);
-  assert.equal(isSodaManaged('/repo', () => sodaStatus(false)), false);
-  assert.equal(isSodaManaged('/repo', () => ok('{}')), false);
-  assert.equal(isSodaManaged('/repo', () => ({ ok: false, code: 1, out: '', err: 'missing' })), false);
+  assert.equal(isSodaManaged('/repo', () => sodaStatus(true), noMarkers), true);
+  assert.equal(isSodaManaged('/repo', () => sodaStatus(false), noMarkers), false);
+  assert.equal(isSodaManaged('/repo', () => ok('{}'), noMarkers), false);
+  assert.equal(isSodaManaged('/repo', () => ({ ok: false, code: 1, out: '', err: 'missing' }), noMarkers), false);
+  assert.equal(isSodaManaged('/repo', () => ({ ok: false, code: 1, out: '', err: 'missing' }), () => true), true);
+});
+
+test('hasSodaWorkspaceMarkers detects local soda workspace', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'forge-markers-'));
+  try {
+    assert.equal(hasSodaWorkspaceMarkers(dir), false);
+    mkdirSync(path.join(dir, '.sd'));
+    writeFileSync(path.join(dir, '.sd', 'meta.json'), '{}');
+    writeFileSync(path.join(dir, '.sd', 'repo-id'), 'repo-1\n');
+    assert.equal(hasSodaWorkspaceMarkers(dir), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('probeSodaStatus stays false on unparseable output', () => {
+  assert.equal(probeSodaStatus('/repo', () => ok('not-json')), false);
+  assert.equal(probeSodaStatus('/repo', () => sodaStatus(true)), true);
+});
+
+test('recognizes soda interlock errors', () => {
+  assert.equal(isSodaGitInterlockError('soda: raw git commit blocked in this sd-powered repo'), true);
+  assert.equal(isSodaGitInterlockError('network failed'), false);
+});
+
+test('updateForge uses sd pull when markers are present even if status fails', async () => {
+  const calls = [];
+  const result = await updateForge({
+    log: () => {},
+    getSubmodules: async () => [],
+    hasMarkers: () => true,
+    runCommand: (cmd, args, cwd) => {
+      calls.push({ cmd, args, cwd });
+      if (cmd === 'sd' && args.join(' ') === 'status') {
+        return { ok: false, code: 1, out: '', err: 'missing' };
+      }
+      if (cmd === 'sd' && args.join(' ') === 'pull') {
+        return sodaPull([{ status: 'integrated', worktreeUpdated: true }]);
+      }
+      return ok();
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    calls.filter((c) => c.cmd === 'sd').map((c) => c.args.join(' ')),
+    ['status', 'pull'],
+  );
+  assert.deepEqual(calls.filter((c) => c.cmd === 'git' && c.args[0] === 'pull'), []);
+});
+
+test('updateForge hard-fails when markers say soda but sd pull fails', async () => {
+  const result = await updateForge({
+    log: () => {},
+    getSubmodules: async () => [],
+    hasMarkers: () => true,
+    runCommand: (cmd, args) => {
+      if (cmd === 'sd' && args.join(' ') === 'status') {
+        return { ok: false, code: 1, out: '', err: 'missing' };
+      }
+      if (cmd === 'sd' && args.join(' ') === 'pull') {
+        return { ok: false, code: 1, out: '', err: 'sd missing' };
+      }
+      return ok();
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(String(result.error || ''), /soda-managed.*sd pull failed/i);
+});
+
+test('updateForge retries with sd pull after soda interlock blocks git', async () => {
+  const calls = [];
+  const result = await updateForge({
+    log: () => {},
+    getSubmodules: async () => [],
+    hasMarkers: noMarkers,
+    runCommand: (cmd, args, cwd) => {
+      calls.push({ cmd, args, cwd });
+      if (cmd === 'sd' && args.join(' ') === 'status') {
+        return sodaStatus(false);
+      }
+      if (cmd === 'git' && args.join(' ') === 'pull --ff-only') {
+        return {
+          ok: false,
+          code: 1,
+          out: '',
+          err: 'soda: raw git commit blocked in this sd-powered repo',
+        };
+      }
+      if (cmd === 'sd' && args.join(' ') === 'pull') {
+        return sodaPull([{ status: 'integrated', worktreeUpdated: true }]);
+      }
+      return ok();
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    calls.filter((c) => c.cmd === 'sd').map((c) => c.args.join(' ')),
+    ['status', 'pull'],
+  );
+  assert.equal(calls.filter((c) => c.cmd === 'git' && c.args[0] === 'pull').length, 1);
 });
