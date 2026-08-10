@@ -34,10 +34,17 @@ complete on purpose; only the rendered text is split.
 the variant spent less, which is good, but "12%" alone reads as ambiguous and was
 mis-stated in earlier runs. Direction words remove the sign-convention guesswork.
 
-**Shape.** `fmtChange(key, pctSaved)` in `lib/report.js` keys off the metric name:
-time-like metrics say faster/slower, count-like metrics say fewer/more. All
-efficiency keys are lower-is-better (latency, model time, ttfc, tokens, model
-calls per solve).
+**Shape.** `fmtChange(key, pctSaved)` in `lib/metrics.js` (used by `lib/report.js`)
+resolves each key through the metrics catalog. Known directions:
+
+- `lower-is-better` time → faster/slower
+- `lower-is-better` other → fewer/more
+- `higher-is-better` → more/less
+- `neutral` → lower/higher
+
+Unknown keys still default to lower-is-better (legacy report behavior). The sign
+convention is unchanged: `pctSaved > 0` means the variant value is lower than
+control.
 
 ## D3: `--quiet` exists because PowerShell treats native stderr as an error
 
@@ -100,3 +107,30 @@ difference.
 
 **Out of scope.** summary/full pack depths; rewriting old ZIP blobs in place
 inside git history of external archive repos.
+
+## D8: Metrics catalog and profiles are a Forge contract
+
+**Decision.** Forge owns a versioned metrics catalog and named profiles
+(`core`, `efficiency`, `capacity`, `forensic`) in `lib/metrics.js`. Capture,
+score, and report are independent planes recorded on `pair.json` as a `metrics`
+provenance block (`requested` / `captured` / `scored` / `reported`, plus
+`catalogVersion`, optional `kashVersion` / `model` / `pricingEpoch`).
+
+**Why.** kash and runbooks already emit richer telemetry (tokens, cost, context
+window). Without shared unit/direction/missingness/provenance, each runbook
+invents dialects and report wording assumes lower-is-better — wrong for capacity
+headroom and unsafe for honest pairs. Profiles let every runbook default to
+preserving baseline metrics while scoring only a declared set.
+
+**Shape.**
+
+- Runbooks call `declareMetrics()` and `buildEfficiency()` / `savings()` when
+  writing `pair.json`.
+- `forge report` surfaces provenance, uses catalog direction wording, and marks
+  control/variant scored-profile mismatches incomparable.
+- Legacy `pair.json` without `metrics` remains valid and comparable to other
+  legacy pairs.
+
+**Out of scope.** Automatic scoring of domain metrics from sample files (runbook
+still owns scoring). Unbounded capture-max as a score set. A single CLI flag that
+collapses capture/score/report into one behavior.

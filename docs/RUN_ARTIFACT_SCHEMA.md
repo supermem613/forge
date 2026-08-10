@@ -17,7 +17,37 @@ Every new bundle opened by `openBundle()` writes:
 | `manifest.json` | Bundle identity, schema versions, timestamps, pairing, and final summary. |
 | `transcript.json` | Append-only index of turn artifact summaries written through `writeTurn()`. |
 
-Runbooks may add domain artifacts such as `run.log`, `results.json`, `signals.json`, `score.json`, `REPORT.json`, `REPORT.md`, `judge-prompts/`, and `judge-verdicts/`.
+Runbooks may add domain artifacts such as `run.log`, `results.json`, `signals.json`, `score.json`, `pair.json`, `REPORT.json`, `REPORT.md`, `judge-prompts/`, and `judge-verdicts/`.
+
+## pair.json metrics provenance (optional, recommended)
+
+When a runbook writes efficiency comparisons, attach a `metrics` block from
+`lib/metrics.js` `declareMetrics()`:
+
+```json
+{
+  "efficiency": {
+    "latencyMs": { "control": 1000, "variant": 800, "delta": 200, "pctSaved": 20 }
+  },
+  "metrics": {
+    "catalogVersion": 1,
+    "requested": "capacity",
+    "captured": "capacity",
+    "scored": "efficiency",
+    "reported": "efficiency",
+    "scoredKeys": ["latencyMs", "totalTokens"],
+    "kashVersion": "1.9.0",
+    "model": null,
+    "pricingEpoch": null,
+    "declaredAt": "2026-08-10T20:00:00.000Z"
+  }
+}
+```
+
+Profiles (`core` ⊂ `efficiency` ⊂ `capacity` ⊂ `forensic`) name key sets. Capture,
+score, and report may differ. `forge report` renders catalog direction wording and
+flags control/variant scored-profile mismatches as incomparable. Omit `metrics`
+only for legacy pairs; do not mix catalog and legacy arms in one comparison.
 
 After `forge archive` with run packing enabled (default), each run directory is
 replaced by a sibling `runs/<timestamp>.tar.zst` solid archive. Loose run trees

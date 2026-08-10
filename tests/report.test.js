@@ -372,3 +372,83 @@ test('runReport: renders the full efficiency metric set across three columns', a
   const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
   assert.equal(json.efficiencyThreeWay.totalTokens.pctSavedVsPrev, 11.11);
 });
+
+test('runReport: surfaces metrics provenance and catalog direction wording', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const ctl = mkScore({
+    overallPct: 30, tiers: tiers(30, 30, 30),
+    evals: [mkEval('e1', 30, tiers(30, 30, 30))],
+    eligibleSamples: 3, totalSamplesAcrossEvals: 3,
+  });
+  const tx = mkScore({
+    overallPct: 50, tiers: tiers(50, 50, 50),
+    evals: [mkEval('e1', 50, tiers(50, 50, 50))],
+    eligibleSamples: 3, totalSamplesAcrossEvals: 3,
+  });
+  const { root, txRun } = await scaffoldExperiment(t, { ctlScore: ctl, txScore: tx });
+  const pair = {
+    efficiency: {
+      latencyMs: { control: 1000, variant: 800, delta: 200, pctSaved: 20 },
+      contextHeadroomRatio: { control: 0.5, variant: 0.4, delta: 0.1, pctSaved: 20 },
+      contextWindowTokens: { control: 100000, variant: 105000, delta: -5000, pctSaved: -5 },
+    },
+    metrics: {
+      catalogVersion: 1,
+      requested: 'capacity',
+      captured: 'capacity',
+      scored: 'capacity',
+      reported: 'capacity',
+      kashVersion: '1.9.0',
+    },
+  };
+  await fs.writeFile(path.join(txRun, 'pair.json'), JSON.stringify(pair));
+  await runReport({ argv: ['--experiment', 'demo'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /Metrics profile: scored `capacity`/);
+  assert.match(md, /kash 1\.9\.0/);
+  assert.match(md, /20% faster/);
+  // higher-is-better headroom: variant lower → "less"
+  assert.match(md, /20% less/);
+  // neutral window size: variant higher → "higher"
+  assert.match(md, /5% higher/);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.metrics.scored, 'capacity');
+  assert.equal(json.metricsComparable, true);
+});
+
+test('runReport: marks control/variant scored-profile mismatch incomparable', async (t) => {
+  const tiers = (m, s, c) => ({ must: { pct: m }, should: { pct: s }, could: { pct: c } });
+  const ctl = mkScore({
+    overallPct: 30, tiers: tiers(30, 30, 30),
+    evals: [mkEval('e1', 30, tiers(30, 30, 30))],
+    eligibleSamples: 3, totalSamplesAcrossEvals: 3,
+  });
+  const tx = mkScore({
+    overallPct: 50, tiers: tiers(50, 50, 50),
+    evals: [mkEval('e1', 50, tiers(50, 50, 50))],
+    eligibleSamples: 3, totalSamplesAcrossEvals: 3,
+  });
+  const { root, txRun } = await scaffoldExperiment(t, { ctlScore: ctl, txScore: tx });
+  const pair = {
+    efficiency: {
+      latencyMs: { control: 1000, variant: 800, delta: 200, pctSaved: 20 },
+    },
+    metrics: {
+      control: {
+        catalogVersion: 1, requested: 'core', captured: 'core',
+        scored: 'core', reported: 'core',
+      },
+      variant: {
+        catalogVersion: 1, requested: 'efficiency', captured: 'efficiency',
+        scored: 'efficiency', reported: 'efficiency',
+      },
+    },
+  };
+  await fs.writeFile(path.join(txRun, 'pair.json'), JSON.stringify(pair));
+  await runReport({ argv: ['--experiment', 'demo'], repoRoot: root, log: () => {} });
+  const md = await fs.readFile(path.join(txRun, 'REPORT.md'), 'utf8');
+  assert.match(md, /Incomparable metrics/i);
+  const json = JSON.parse(await fs.readFile(path.join(txRun, 'REPORT.json'), 'utf8'));
+  assert.equal(json.metricsComparable, false);
+  assert.match(json.metricsCompareReason, /scored profile/i);
+});

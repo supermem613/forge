@@ -81,6 +81,19 @@ Criterion text is shown to the judge model verbatim. Rewording criteria invalida
 
 `forge validate` warns when `description` is missing or too short to state a behavior and its proof.
 
+## Metrics profiles
+
+Efficiency metrics use the Forge catalog in `lib/metrics.js` (see DECISIONS D8).
+
+- **Profiles:** `core` → `efficiency` → `capacity` → `forensic` (each includes the previous).
+- **Planes:** capture, score, and report are independent. A runbook may capture
+  capacity telemetry while scoring only `efficiency`.
+- **pair.json:** prefer `declareMetrics()` + `savings()` / `buildEfficiency()` so
+  reports get direction-aware wording and provenance.
+- **Honesty:** missing telemetry is `null`, never a fabricated zero. Do not put
+  speed/token cost into eval `must` criteria unless that property is the product
+  requirement (see eval rules above).
+
 ## Step shims
 
 Step files are executable shims. They should delegate mechanics to reusable library code or module code and keep runbook-specific orchestration small.
