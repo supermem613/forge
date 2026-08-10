@@ -59,7 +59,7 @@ Runbook modules may extend the manifest with namespaced fields.
 ```json
 {
   "id": "example",
-  "description": "Short human description.",
+  "description": "Enforces <one production behavior>. Proof: must criteria observe <concrete outcome>.",
   "prompt": "Prompt or input for the system under test.",
   "criteria": {
     "must": ["Required observable outcome."],
@@ -69,7 +69,17 @@ Runbook modules may extend the manifest with namespaced fields.
 }
 ```
 
+### Eval authoring rules
+
+1. **One eval, one production behavior.** `description` names that behavior and how `must` proves it. Do not pack unrelated checks into one eval.
+2. **More evals is not automatically better.** Add an eval only when it locks a behavior you care about in production (or a real failure you dogfooded).
+3. **`must` is correctness only.** Put observable outcomes in `must`. Do not put speed, token cost, or “was efficient” in `must` unless that property is itself the product requirement. Pair efficiency stays in report metrics.
+4. **Harness plumbing is not capability score.** Unit or integration checks of the runbook/harness do not belong in skill-quality evals.
+5. **Targeted runs use `--evalIds`.** Prefer an explicit id list for partial suites. Do not invent taxonomy fields for grouping.
+
 Criterion text is shown to the judge model verbatim. Rewording criteria invalidates prior verdicts because the criteria hash changes.
+
+`forge validate` warns when `description` is missing or too short to state a behavior and its proof.
 
 ## Step shims
 

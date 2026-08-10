@@ -1,6 +1,6 @@
 {
   "id": "sample-eval",
-  "description": "Generic eval fixture for loader tests.",
+  "description": "Enforces a generic summary response. Proof: must criteria require the prompt is addressed.",
   "prompt": "Summarize the provided artifact.",
   "criteria": {
     "must": [

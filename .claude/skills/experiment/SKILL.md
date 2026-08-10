@@ -11,6 +11,10 @@ Read `README.md`, `METHODOLOGY.md`, the target runbook `README.md`, and the expe
 
 Use the `forge` CLI as the driver. Do not call runbook scripts directly unless debugging a failed Forge command.
 
+## Eval growth
+
+When a run fails for a real product reason, add a runbook eval that would catch that failure, then re-run the pair. Prefer targeted evals over growing a weak suite. Use `--evalIds` for cheap partial runs.
+
 ## Judge model policy
 
 The judge runs as a sub-agent that reads `judge-prompts/*.md` and writes verdicts to `judge-verdicts/`. To avoid a wasted grading pass:

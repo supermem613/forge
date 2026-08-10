@@ -26,7 +26,9 @@ async function tmpRunbook(name, manifestPatch = {}, opts = {}) {
   }
   if (opts.evalContent !== null) {
     const ev = opts.evalContent || {
-      id: 'e1', criteria: { must: [{ text: 'produces a useful answer' }], should: [], could: [] },
+      id: 'e1',
+      description: 'Enforces a useful answer. Proof: must criteria require an observable response.',
+      criteria: { must: [{ text: 'produces a useful answer' }], should: [], could: [] },
     };
     await fs.writeFile(path.join(dir, 'evals', '01.json'), JSON.stringify(ev, null, 2));
   }
@@ -85,11 +87,41 @@ test('validate: missing must tier flagged', async () => {
 
 test('validate: empty must tier is a warning', async () => {
   const { dir } = await tmpRunbook('warn', {}, {
-    evalContent: { id: 'e1', criteria: { must: [], should: [], could: [] } },
+    evalContent: {
+      id: 'e1',
+      description: 'Enforces a gate with no must yet. Proof: empty must is intentional for this fixture.',
+      criteria: { must: [], should: [], could: [] },
+    },
   });
   const r = await validateRunbook({ runbookDir: dir });
   assert.equal(r.ok, true);
   assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings.join('\n'), /criteria\.must is empty/);
+});
+
+test('validate: missing eval description is a warning', async () => {
+  const { dir } = await tmpRunbook('nodesc', {}, {
+    evalContent: {
+      id: 'e1',
+      criteria: { must: [{ text: 'produces a useful answer' }], should: [], could: [] },
+    },
+  });
+  const r = await validateRunbook({ runbookDir: dir });
+  assert.equal(r.ok, true);
+  assert.match(r.warnings.join('\n'), /missing description/);
+});
+
+test('validate: short eval description is a warning', async () => {
+  const { dir } = await tmpRunbook('shortdesc', {}, {
+    evalContent: {
+      id: 'e1',
+      description: 'too short',
+      criteria: { must: [{ text: 'produces a useful answer' }], should: [], could: [] },
+    },
+  });
+  const r = await validateRunbook({ runbookDir: dir });
+  assert.equal(r.ok, true);
+  assert.match(r.warnings.join('\n'), /description is very short/);
 });
 
 test('validate: missing README flagged', async () => {
@@ -103,6 +135,7 @@ test('validate: vague and duplicate criteria are warnings', async () => {
   const { dir } = await tmpRunbook('vague', {}, {
     evalContent: {
       id: 'e1',
+      description: 'Enforces duplicate short criteria. Proof: must entries are intentionally weak for this fixture.',
       criteria: {
         must: [{ text: 'ok' }, { text: 'ok' }],
         should: [{ note: 'missing text' }],
