@@ -134,3 +134,14 @@ preserving baseline metrics while scoring only a declared set.
 **Out of scope.** Automatic scoring of domain metrics from sample files (runbook
 still owns scoring). Unbounded capture-max as a score set. A single CLI flag that
 collapses capture/score/report into one behavior.
+
+## Variant artifacts must be full trees (2026-08-11)
+
+sharepoint-automation quality/selection runs initially stored only sha256
+identity on the run bundle. That broke the archive contract: mark-1 body
+could not be recovered after the live package moved to v0.1.1.
+
+Decision: every mark treatment input is copied to
+ariants/<mark>/artifacts/<name>/ and uns/<ts>/snapshots/<name>/ via
+lib/variant-artifacts.js. Score/archive paths may hard-fail when a mark
+run claims a treatment without those trees.
