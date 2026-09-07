@@ -25,7 +25,7 @@ test('every profile key exists in the catalog', () => {
   for (const [name, keys] of Object.entries(METRIC_PROFILES)) {
     assert.ok(keys.length > 0, name);
     for (const key of keys) {
-      assert.ok(isKnownMetric(key), `${name} -> ${key}`);
+      assert.ok(isKnownMetric(key), `${name} → ${key}`);
       const m = resolveMetric(key);
       assert.equal(m.key, key);
       assert.ok(['lower-is-better', 'higher-is-better', 'neutral'].includes(m.direction));
@@ -35,7 +35,7 @@ test('every profile key exists in the catalog', () => {
   }
 });
 
-test('profiles nest: core is contained in efficiency, efficiency in capacity', () => {
+test('profiles nest: core ⊂ efficiency ⊂ capacity', () => {
   const core = new Set(profileKeys('core'));
   const efficiency = new Set(profileKeys('efficiency'));
   const capacity = new Set(profileKeys('capacity'));
@@ -90,6 +90,8 @@ test('fmtChange: count/token metrics use fewer/more', () => {
 });
 
 test('fmtChange: higher-is-better metrics invert wording', () => {
+  // pctSaved still uses control−variant. Positive means variant is lower.
+  // For higher-is-better, lower is worse → "worse" wording via less/more of good thing.
   assert.equal(fmtChange('contextHeadroomRatio', 20), '20% less');
   assert.equal(fmtChange('contextHeadroomRatio', -10), '10% more');
 });

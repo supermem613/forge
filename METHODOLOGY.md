@@ -53,3 +53,15 @@ Completed run bundles are append-only evidence. Re-scoring, refits, or resamples
 2. **Dogfood loop.** When a real run fails for a real reason, add an eval that would have caught it, then re-run the pair.
 3. **Correctness first.** Judge `must` on outcomes. Compare efficiency between control and variant in the report; do not smuggle cost into pass/fail criteria unless the product requires it.
 4. **Partial runs.** Use `forge run … --evalIds a,b` when you need a cheap slice.
+
+## Variant artifacts invariant
+
+**Mark variants MUST keep full treatment inputs under ariants/<mark>/artifacts/.**  
+**Each mark run MUST also freeze those inputs under uns/<ts>/snapshots/.**
+
+- Hashes / package-identity.json alone are not enough.
+- Archives pack the experiment tree; if the skill body is missing from the variant, history is lost when the live package moves on.
+- Control may leave rtifacts/ empty.
+- Use lib/variant-artifacts.js (esolveAndFreezeTreatment) from every runbook that applies a treatment tree (skills, overlays, packs).
+- Do not edit frozen rtifacts/ in place after scores exist; cut mark-N+1 instead.
+
