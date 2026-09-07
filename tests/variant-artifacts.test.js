@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { copyTree, resolveAndFreezeTreatment, assertMarkTreatmentFrozen } from '../lib/variant-artifacts.js';
+import { resolveAndFreezeTreatment, assertMarkTreatmentFrozen } from '../lib/variant-artifacts.js';
 
 test('resolveAndFreezeTreatment freezes mark artifacts and run snapshot', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'forge-va-'));
