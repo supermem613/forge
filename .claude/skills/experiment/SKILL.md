@@ -17,7 +17,9 @@ When a run fails for a real product reason, add a runbook eval that would catch 
 
 ## Judge model policy
 
-The judge runs as a sub-agent that reads `judge-prompts/*.md` and writes verdicts to `judge-verdicts/`. To avoid a wasted grading pass:
+If the runbook `manifest.json` has `"evalKind": "oracle"`, do not dispatch a judge sub-agent. Run `forge grade <experiment> --finalize` so score comes from `score.json`. `forge judge --dispatch-prompt` fails on oracle runbooks.
+
+Otherwise the judge runs as a sub-agent that reads `judge-prompts/*.md` and writes verdicts to `judge-verdicts/`. To avoid a wasted grading pass:
 
 1. **Never hand-write the verdict schema.** Hand the sub-agent the verbatim output of `forge judge <experiment> --dispatch-prompt`. It carries the exact `criteria_results` schema, the required model, and the paths. Inventing a `{criteria: [...]}` shape gets rejected only at collect, after the whole pass is spent.
 2. **Use the model the dispatch prompt names** (the single source of truth is `REQUIRED_JUDGE_MODEL` in `lib/judge.js`). Mixing models within a control/variant pair contaminates the comparison; off-model verdicts are rejected.

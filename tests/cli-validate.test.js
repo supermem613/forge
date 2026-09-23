@@ -186,6 +186,19 @@ test('validate: large fixture file is a warning', async () => {
   assert.match(r.warnings.join('\n'), /large fixtures slow setup/);
 });
 
+test('validate: unknown evalKind is an error', async () => {
+  const { dir } = await tmpRunbook('badkind', { evalKind: 'llm' });
+  const r = await validateRunbook({ runbookDir: dir });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes("evalKind must be oracle|judge|hybrid (got 'llm')")));
+});
+
+test('validate: evalKind oracle is accepted', async () => {
+  const { dir } = await tmpRunbook('oraclekind', { evalKind: 'oracle' });
+  const r = await validateRunbook({ runbookDir: dir });
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 test('formatValidateResult: ok with no warnings', () => {
   const out = formatValidateResult({ ok: true, errors: [], warnings: [] }, { runbookId: 'rb' });
   assert.match(out, /\[rb\] OK/);
