@@ -224,3 +224,51 @@ test('runJudge: skips run with no results.json', async (t) => {
   const status = JSON.parse(await fs.readFile(path.join(ctlRun, 'judge-status.json'), 'utf8'));
   assert.equal(status.processed, 0);
 });
+
+test('runJudge: oracle evalKind skips prompt write and reports judgeDispatches 0', async (t) => {
+  const { root, rb, ctlRun } = await scaffold(t, { withVariant: false });
+  await fs.writeFile(path.join(rb, 'manifest.json'), JSON.stringify({
+    evals: ['evals/01.json', 'evals/02.json'],
+    evalKind: 'oracle',
+  }));
+  const result = await runJudge({
+    argv: ['--experiment', 'demo', '--mode', 'agent', '--variant', 'control'],
+    runbookDir: rb, repoRoot: root, log: () => {},
+  });
+  // Spec: oracle mode never dispatches a gpt-5.5 judge. 0 is the contract, not a derived count.
+  assert.equal(result.evalKind, 'oracle');
+  assert.equal(result.judgeDispatches, 0);
+  const status = JSON.parse(await fs.readFile(path.join(ctlRun, 'judge-status.json'), 'utf8'));
+  assert.equal(status.processed, 0);
+  assert.equal(status.judgeDispatches, 0);
+});
+
+test('runJudge: oracle evalKind refuses --dispatch-prompt', async (t) => {
+  const { root, rb } = await scaffold(t, { withVariant: false });
+  await fs.writeFile(path.join(rb, 'manifest.json'), JSON.stringify({
+    evals: ['evals/01.json', 'evals/02.json'],
+    evalKind: 'oracle',
+  }));
+  await assert.rejects(
+    () => runJudge({
+      argv: ['--experiment', 'demo', '--dispatch-prompt'],
+      runbookDir: rb, repoRoot: root, log: () => {},
+    }),
+    (err) => err.code === 'JUDGE_ORACLE_NO_DISPATCH',
+  );
+});
+
+test('runJudge: unknown evalKind fails closed', async (t) => {
+  const { root, rb } = await scaffold(t, { withVariant: false });
+  await fs.writeFile(path.join(rb, 'manifest.json'), JSON.stringify({
+    evals: ['evals/01.json', 'evals/02.json'],
+    evalKind: 'llm',
+  }));
+  await assert.rejects(
+    () => runJudge({
+      argv: ['--experiment', 'demo', '--mode', 'agent', '--variant', 'control'],
+      runbookDir: rb, repoRoot: root, log: () => {},
+    }),
+    (err) => err.message.includes("evalKind must be oracle|judge|hybrid (got 'llm')"),
+  );
+});

@@ -63,15 +63,22 @@ governs the Forge wrapper only.
 
 **Decision.** `forge grade <exp>` prepares judge prompts and prints the gpt-5.5
 dispatch contract. `forge grade <exp> --finalize` validates verdicts, collects
-them, and scores.
+them, and scores. Unspecified `evalKind` stays `judge`.
+
+When `manifest.evalKind` is `oracle`, `forge grade` does not dispatch gpt-5.5.
+Prepare reports `judgeDispatches: 0`. Finalize runs `score` only. `--dispatch-prompt`
+fails with `JUDGE_ORACLE_NO_DISPATCH`. Unknown `evalKind` values fail closed.
 
 **Why.** Judging cannot be one-shot automated: an external gpt-5.5 sub-agent must
 write the verdicts between prompt generation and collection. `grade` collapses the
 surrounding four-call dance into two named phases around that authoring step.
+Deterministic runbooks that already encode pass/fail in `score.json` must not pay
+that dispatch.
 
 **Shape.** Each underlying step runs with its stdout captured (see `runStep`'s
 `capture` option) so `grade` emits exactly one JSON envelope, honoring the
-single-envelope contract. The gpt-5.5 judge model is the only judge model.
+single-envelope contract. The gpt-5.5 judge model is the only judge model when
+`evalKind` is `judge` or `hybrid`.
 
 ## D5: One JSON envelope per command on stdout
 

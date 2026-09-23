@@ -48,9 +48,16 @@ runbooks/<id>/
   "description": "What this runbook measures.",
   "fixturePrefix": "_ForgeTest_runbook-id_",
   "evals": ["evals/01-example.json"],
-  "defaults": { "samples": 3 }
+  "defaults": { "samples": 3 },
+  "evalKind": "judge"
 }
 ```
+
+`evalKind` is `oracle`, `judge`, or `hybrid`. Omit it to keep `judge`.
+
+- `judge` (default): `forge grade` writes prompts and prints the gpt-5.5 dispatch contract. `forge grade --finalize` validates verdicts, collects them, and scores.
+- `oracle`: no gpt-5.5 dispatch. `forge grade` reports `judgeDispatches: 0`. `forge grade --finalize` scores from `score.json` only. `--dispatch-prompt` fails.
+- `hybrid`: same dispatch path as `judge` in this slice. Per-eval mix is not implemented.
 
 Runbook modules may extend the manifest with namespaced fields.
 
